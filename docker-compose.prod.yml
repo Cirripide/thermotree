@@ -1,0 +1,91 @@
+# Prod-parity local stack. Differs from docker-compose.yml (the dev-loop
+# file) in every load-bearing way:
+#   - No bind mounts: image content is canonical.
+#   - No --reload, no npm start: production servers only.
+#   - Backend is NOT published externally — only frontend port 8080 is.
+#   - Healthchecks on both services + depends_on: service_healthy.
+#   - restart: unless-stopped on both.
+#   - Required env vars use fail-fast syntax (compose refuses to start
+#     if NOMINATIM_USER_AGENT / PHOTON_USER_AGENT are unset).
+#
+# Run with:
+#   NOMINATIM_USER_AGENT='thermotree/0.1 (you@example.com)' \
+#   PHOTON_USER_AGENT='thermotree/0.1 (you@example.com)' \
+#   docker compose -f docker-compose.prod.yml up --build
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: thermotree-backend:local
+    container_name: thermotree_be_prod
+    # No ports: backend reachable only on the compose network at
+    # hostname `backend`. Frontend nginx is the single public entrypoint.
+    environment:
+      # Required. The placeholder defaults in backend/app/core/config.py
+      # technically work but violate Photon/Nominatim fair-use policies —
+      # failing at compose-up is preferable to discovering rate limits
+      # in prod.
+      NOMINATIM_USER_AGENT: "${NOMINATIM_USER_AGENT:?NOMINATIM_USER_AGENT must be set to a descriptive UA with contact email}"
+      PHOTON_USER_AGENT:    "${PHOTON_USER_AGENT:?PHOTON_USER_AGENT must be set to a descriptive UA with contact email}"
+      # Optional. Empty strings flow into Pydantic and are coerced back
+      # to defaults by validators in backend/app/core/config.py.
+      NOMINATIM_BASE_URL:   "${NOMINATIM_BASE_URL:-}"
+      PHOTON_BASE_URL:      "${PHOTON_BASE_URL:-}"
+      STAC_PROVIDERS:       "${STAC_PROVIDERS:-}"
+      # Default 1 preserves the per-process MAX_CONCURRENT_ZONE_BUILDS
+      # invariant in config.py and keeps ZonesRunner coalescing effective.
+      UVICORN_WORKERS:      "${UVICORN_WORKERS:-1}"
+      PORT:                 "8000"
+    healthcheck:
+      # Mirrors the image HEALTHCHECK but compose-level — compose ignores
+      # image healthchecks for `depends_on` ordering, so both must exist.
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/', timeout=3).status == 200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - thermotree
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Pin Node version from .nvmrc. The Dockerfile has 22.14.0 as a
+        # default so a bare `docker compose -f docker-compose.prod.yml
+        # up --build` works without the Makefile.
+        NODE_VER: "${NODE_VERSION:-22.14.0}"
+    image: thermotree-frontend:local
+    container_name: thermotree_fe_prod
+    environment:
+      # host:port the nginx template substitutes into the /api/ upstream.
+      # Matches the backend service name on this compose network. In ACA
+      # this is set to <backend>.internal.<env-default-domain>:8000.
+      UPSTREAM_BACKEND: "backend:8000"
+    ports:
+      # The only public port in the stack.
+      - "8080:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - thermotree
+
+networks:
+  thermotree:
+    driver: bridge

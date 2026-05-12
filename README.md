@@ -107,6 +107,6 @@ thermotree/
 This is a proof of concept. Known limitations:
 
 * The Northern Hemisphere summer window (June, July, August) is hard coded. Tropical and Southern Hemisphere cities will need a per latitude summer rule before this can credibly serve every place on Earth.
-* AOIs above 2,500 km² are rejected with a 400. Very large metros (Tokyo, London, São Paulo) hit this cap and need either a smaller inner city polygon or internal tiling.
+* AOIs above 3,000 km² are rejected with a 400. Very large metros (Tokyo, London, São Paulo) hit this cap and need either a smaller inner city polygon or internal tiling.
 * The public Photon and Nominatim instances are not production grade dependencies at scale; respect their usage policies and self host before any real traffic.
 * No auth, no rate limit, no observability beyond the FastAPI logs.

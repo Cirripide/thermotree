@@ -1,0 +1,51 @@
+# Node modules — npm ci reinstalls fresh from package-lock.json
+node_modules/
+
+# Angular caches and outputs
+.angular/
+dist/
+coverage/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Test artifacts
+.nyc_output/
+
+# Local config / secrets
+.env
+.env.local
+.env.*.local
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# VCS
+.git/
+.gitignore
+.gitattributes
+.editorconfig
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Project artifacts that don't belong in the runtime image
+README*
+*.md
+LICENSE*
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Dev-server only — replaced by nginx.conf in prod
+proxy.conf.json
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

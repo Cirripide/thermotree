@@ -19,6 +19,15 @@ DEFAULT_PHOTON_USER_AGENT = (
     "thermotree/0.1 (set PHOTON_USER_AGENT to your contact email)"
 )
 
+# LocationIQ — paid managed Nominatim+Photon equivalent. When the API key is
+# set, the lifespan wires this provider in place of the Photon/Nominatim
+# composite. No default key: absence of LOCATIONIQ_API_KEY means "stay on the
+# public free providers" (dev path).
+DEFAULT_LOCATIONIQ_BASE_URL = "https://us1.locationiq.com/v1"
+DEFAULT_LOCATIONIQ_USER_AGENT = (
+    "thermotree/0.1 (set LOCATIONIQ_USER_AGENT to your contact email)"
+)
+
 # STAC backend URLs. The runtime resolves a provider name (e.g. "element84")
 # to one of these via the registry in services/imagery_providers/base.py.
 ELEMENT84_STAC_URL = "https://earth-search.aws.element84.com/v1"
@@ -34,6 +43,12 @@ class Settings(BaseSettings):
     nominatim_user_agent: str = DEFAULT_NOMINATIM_USER_AGENT
     photon_base_url: str = DEFAULT_PHOTON_BASE_URL
     photon_user_agent: str = DEFAULT_PHOTON_USER_AGENT
+
+    # LocationIQ. Setting locationiq_api_key flips the geocoder over to the
+    # managed paid provider and the Photon/Nominatim composite is not built.
+    locationiq_api_key: str = ""
+    locationiq_base_url: str = DEFAULT_LOCATIONIQ_BASE_URL
+    locationiq_user_agent: str = DEFAULT_LOCATIONIQ_USER_AGENT
 
     # STAC backends, in priority order. Planetary Computer is the primary
     # because its Azure-hosted COGs read faster than Element84's AWS S3
@@ -105,6 +120,29 @@ class Settings(BaseSettings):
         if v and str(v).strip():
             return str(v)
         return DEFAULT_PHOTON_USER_AGENT
+
+    @field_validator("locationiq_api_key", mode="before")
+    @classmethod
+    def _locationiq_api_key_fallback(cls, v: str | None) -> str:
+        # Empty string is meaningful here ("no key set, use the free
+        # composite"), so we only strip whitespace and pass it through.
+        if v is None:
+            return ""
+        return str(v).strip()
+
+    @field_validator("locationiq_base_url", mode="before")
+    @classmethod
+    def _locationiq_base_url_fallback(cls, v: str | None) -> str:
+        if v and str(v).strip():
+            return str(v)
+        return DEFAULT_LOCATIONIQ_BASE_URL
+
+    @field_validator("locationiq_user_agent", mode="before")
+    @classmethod
+    def _locationiq_user_agent_fallback(cls, v: str | None) -> str:
+        if v and str(v).strip():
+            return str(v)
+        return DEFAULT_LOCATIONIQ_USER_AGENT
 
     # STAC_PROVIDERS arrives from env as a comma-separated string ("a,b").
     # Pydantic doesn't split that natively for list[str], so we parse it here
