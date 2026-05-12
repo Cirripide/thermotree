@@ -1,0 +1,336 @@
+<div class="app-shell">
+  <main class="map-wrap" [class.is-loading]="mapLoading()">
+    <div id="compare-container" #compareContainer>
+      <div id="map-left" #mapLeft></div>
+      <div id="map-right" #mapRight></div>
+    </div>
+    @if (mapLoading()) {
+      <div class="skeleton" aria-busy="true" aria-label="Loading basemap">
+        <div class="skeleton-spinner"></div>
+      </div>
+    }
+    @if (mapError()) {
+      <div class="error-overlay">
+        <mat-chip-set>
+          <mat-chip highlighted>
+            <mat-icon matChipAvatar>error_outline</mat-icon>
+            Failed to load basemap
+          </mat-chip>
+        </mat-chip-set>
+      </div>
+    }
+    @if (zonesLoading()) {
+      <div class="zones-loading-overlay" aria-busy="true">
+        <mat-chip-set>
+          <mat-chip highlighted>
+            <mat-spinner matChipAvatar [diameter]="16"></mat-spinner>
+            Building heat & vegetation grid…
+          </mat-chip>
+        </mat-chip-set>
+      </div>
+    }
+    @if (zonesError()) {
+      <div class="zones-error-overlay">
+        <mat-chip-set>
+          <mat-chip highlighted>
+            <mat-icon matChipAvatar>error_outline</mat-icon>
+            {{ zonesError() }}
+          </mat-chip>
+        </mat-chip-set>
+      </div>
+    }
+    @if (hasZones() && colorsVisible()) {
+      <div class="legend legend-left"
+           [class.is-collapsed]="!heatExpanded()"
+           (click)="toggleLegend('heat')"
+           (keydown.enter)="toggleLegend('heat')"
+           (keydown.space)="toggleLegend('heat'); $event.preventDefault()"
+           role="button"
+           tabindex="0"
+           aria-label="Heat scale">
+        <div class="legend-title">Heat — LST (°C)</div>
+        <div class="legend-bins">
+          @for (b of heatLegend(); track $index) {
+            <div class="bin">
+              <span class="swatch" [style.background]="b.color"></span>
+              <span class="label">
+                @if (b.label) {
+                  <span class="label-name">{{ b.label }}</span>
+                }
+                <span class="label-range">
+                  @if (b.lower === null) {
+                    &lt; {{ b.upper | number:'1.0-1' }} °C
+                  } @else if (b.upper === null) {
+                    &gt; {{ b.lower | number:'1.0-1' }} °C
+                  } @else {
+                    {{ b.lower | number:'1.0-1' }}–{{ b.upper | number:'1.0-1' }} °C
+                  }
+                </span>
+              </span>
+            </div>
+          }
+          @if (heatHasNoData()) {
+            <div class="bin no-data">
+              <span class="swatch"></span>
+              <span class="label">
+                <span class="label-name">No data</span>
+              </span>
+            </div>
+          }
+        </div>
+      </div>
+      <div class="legend legend-right"
+           [class.is-collapsed]="!vegExpanded()"
+           (click)="toggleLegend('veg')"
+           (keydown.enter)="toggleLegend('veg')"
+           (keydown.space)="toggleLegend('veg'); $event.preventDefault()"
+           role="button"
+           tabindex="0"
+           aria-label="Vegetation scale">
+        <div class="legend-title">Vegetation — NDVI</div>
+        <div class="legend-bins">
+          @for (b of vegLegend(); track $index) {
+            <div class="bin">
+              <span class="swatch" [style.background]="b.color"></span>
+              <span class="label">
+                @if (b.label) {
+                  <span class="label-name">{{ b.label }}</span>
+                }
+                <span class="label-range">
+                  @if (b.lower === null) {
+                    &lt; {{ b.upper | number:'1.1-1' }}
+                  } @else if (b.upper === null) {
+                    &gt; {{ b.lower | number:'1.1-1' }}
+                  } @else {
+                    {{ b.lower | number:'1.1-1' }}–{{ b.upper | number:'1.1-1' }}
+                  }
+                </span>
+              </span>
+            </div>
+          }
+          @if (vegHasNoData()) {
+            <div class="bin no-data">
+              <span class="swatch"></span>
+              <span class="label">
+                <span class="label-name">No data</span>
+              </span>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="legend-mobile" [class.is-open]="legendOpen()">
+        <button
+          type="button"
+          class="legend-sheet-handle"
+          (click)="toggleLegendOpen()"
+          [attr.aria-expanded]="legendOpen()"
+          [attr.aria-label]="legendOpen() ? 'Close legend' : 'Open legend'"
+        >
+          <mat-icon>{{ legendOpen() ? 'expand_more' : 'expand_less' }}</mat-icon>
+          <span>{{ legendOpen() ? 'Close legend' : 'Open legend' }}</span>
+        </button>
+
+        <div class="legend-sheet-content">
+        <div class="legend-toggle" role="tablist" aria-label="Map legend">
+          <button
+            type="button"
+            role="tab"
+            class="legend-toggle-btn"
+            [class.is-active]="activeMobileLegend() === 'heat'"
+            [attr.aria-selected]="activeMobileLegend() === 'heat'"
+            (click)="setActiveMobileLegend('heat')"
+          >
+            <mat-icon>local_fire_department</mat-icon>
+            <span>Heat</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            class="legend-toggle-btn"
+            [class.is-active]="activeMobileLegend() === 'veg'"
+            [attr.aria-selected]="activeMobileLegend() === 'veg'"
+            (click)="setActiveMobileLegend('veg')"
+          >
+            <mat-icon>park</mat-icon>
+            <span>Vegetation</span>
+          </button>
+        </div>
+
+        <div class="legend-body">
+          @if (activeMobileLegend() === 'heat') {
+            <div class="legend-title">Heat — LST (°C)</div>
+            <div class="legend-bins">
+              @for (b of heatLegend(); track $index) {
+                <div class="bin">
+                  <span class="swatch" [style.background]="b.color"></span>
+                  <span class="label">
+                    @if (b.label) {
+                      <span class="label-name">{{ b.label }}</span>
+                    }
+                    <span class="label-range">
+                      @if (b.lower === null) {
+                        &lt; {{ b.upper | number:'1.0-1' }} °C
+                      } @else if (b.upper === null) {
+                        &gt; {{ b.lower | number:'1.0-1' }} °C
+                      } @else {
+                        {{ b.lower | number:'1.0-1' }}–{{ b.upper | number:'1.0-1' }} °C
+                      }
+                    </span>
+                  </span>
+                </div>
+              }
+              @if (heatHasNoData()) {
+                <div class="bin no-data">
+                  <span class="swatch"></span>
+                  <span class="label">
+                    <span class="label-name">No data</span>
+                  </span>
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="legend-title">Vegetation — NDVI</div>
+            <div class="legend-bins">
+              @for (b of vegLegend(); track $index) {
+                <div class="bin">
+                  <span class="swatch" [style.background]="b.color"></span>
+                  <span class="label">
+                    @if (b.label) {
+                      <span class="label-name">{{ b.label }}</span>
+                    }
+                    <span class="label-range">
+                      @if (b.lower === null) {
+                        &lt; {{ b.upper | number:'1.1-1' }}
+                      } @else if (b.upper === null) {
+                        &gt; {{ b.lower | number:'1.1-1' }}
+                      } @else {
+                        {{ b.lower | number:'1.1-1' }}–{{ b.upper | number:'1.1-1' }}
+                      }
+                    </span>
+                  </span>
+                </div>
+              }
+              @if (vegHasNoData()) {
+                <div class="bin no-data">
+                  <span class="swatch"></span>
+                  <span class="label">
+                    <span class="label-name">No data</span>
+                  </span>
+                </div>
+              }
+            </div>
+          }
+        </div>
+        </div>
+      </div>
+    }
+  </main>
+
+  <aside class="sidebar" aria-label="City controls">
+    <header class="sidebar-header">
+      <div class="wordmark">
+        <img class="wordmark-logo" src="assets/logo.svg" alt="" aria-hidden="true" width="28" height="28">
+        <span class="wordmark-text">Thermotree</span>
+      </div>
+      <div class="sidebar-header-actions">
+        <button
+          type="button"
+          class="layer-toggle"
+          (click)="openAbout()"
+          aria-label="About this map"
+        >
+          <mat-icon>help_outline</mat-icon>
+          <span>What is this?</span>
+        </button>
+        @if (hasZones()) {
+          <button
+            type="button"
+            class="layer-toggle"
+            (click)="toggleColors()"
+            [attr.aria-pressed]="!colorsVisible()"
+            [attr.aria-label]="colorsVisible() ? 'Hide heat and vegetation colors' : 'Show heat and vegetation colors'"
+          >
+            <mat-icon>{{ colorsVisible() ? 'layers_clear' : 'palette' }}</mat-icon>
+            <span>{{ colorsVisible() ? 'Show basemap' : 'Show colors' }}</span>
+          </button>
+        }
+      </div>
+    </header>
+
+    <section class="sidebar-section search-section">
+      <mat-form-field appearance="outline" class="search-field" subscriptSizing="dynamic">
+        <span matIconPrefix class="search-prefix">
+          <mat-icon [class.is-hidden]="searching() || boundaryLoading()">search</mat-icon>
+          @if (searching() || boundaryLoading()) {
+            <mat-spinner class="search-prefix-spinner" [diameter]="18"></mat-spinner>
+          }
+        </span>
+        <mat-label>Search a city in the world</mat-label>
+        <input
+          type="text"
+          matInput
+          [formControl]="queryControl"
+          [matAutocomplete]="auto"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </mat-form-field>
+
+      <mat-autocomplete
+        #auto="matAutocomplete"
+        [displayWith]="displayPlace"
+        (optionSelected)="onSelect($event)"
+        class="search-panel"
+      >
+        @for (place of results(); track place.osm_id) {
+          <mat-option [value]="place">
+            <span class="opt-name" [innerHTML]="highlight(place.display_name)"></span>
+            @if (place.country) {
+              <span class="opt-country">— {{ place.country }}</span>
+            }
+          </mat-option>
+        }
+      </mat-autocomplete>
+
+      @if (boundaryError()) {
+        <div class="error-banner" role="alert">
+          <mat-icon>warning_amber</mat-icon>
+          <span class="error-text">{{ boundaryError() }}</span>
+          <button type="button" class="error-dismiss" (click)="dismissBoundaryError()" aria-label="Dismiss">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      }
+
+      <div
+        class="selected-hint"
+        [class.is-empty]="!selectedName()"
+      >
+        <mat-icon>place</mat-icon>
+        <span [title]="selectedName() ?? ''">{{ selectedName() ?? '—' }}</span>
+      </div>
+    </section>
+
+    <section class="sidebar-section year-section">
+      <div class="section-title">
+        <mat-icon>calendar_today</mat-icon>
+        <span>Summer</span>
+      </div>
+      <mat-form-field appearance="outline" class="year-select" subscriptSizing="dynamic">
+        <mat-select
+          aria-label="Summer year"
+          [value]="selectedYear()"
+          (selectionChange)="onYearChange($event.value)"
+          [disabled]="inputsLocked()"
+          panelClass="year-select-panel"
+        >
+          @for (year of availableYears(); track year) {
+            <mat-option [value]="year">{{ year }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    </section>
+
+  </aside>
+</div>

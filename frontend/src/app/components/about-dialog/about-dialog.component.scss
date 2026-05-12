@@ -1,0 +1,131 @@
+:host {
+  display: block;
+  color: var(--text-strong);
+}
+
+.about-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+
+  .about-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .about-dot {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--brand-strong);
+    box-shadow: 0 0 14px var(--brand-focus);
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-strong);
+  }
+
+  .about-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: var(--surface-input-strong);
+    border: 1px solid var(--border-input);
+    border-radius: var(--radius-md);
+    color: var(--text-strong);
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      line-height: 18px;
+      color: var(--brand-strong);
+    }
+
+    &:hover {
+      border-color: var(--border-strong);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--brand-focus);
+      outline-offset: 2px;
+    }
+  }
+}
+
+.about-content {
+  padding: 18px 22px 22px;
+  max-height: min(72vh, 640px);
+  overflow-y: auto;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.about-section {
+  & + & {
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  h3 {
+    margin: 0 0 8px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-faint);
+  }
+
+  p {
+    margin: 0 0 10px;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  ul {
+    margin: 0 0 10px;
+    padding-left: 20px;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    li + li {
+      margin-top: 6px;
+    }
+  }
+
+  strong {
+    color: var(--text-strong);
+    font-weight: 600;
+  }
+
+  em {
+    color: var(--text-strong);
+    font-style: italic;
+  }
+}
+
+.about-credits {
+  color: var(--text-mute);
+  font-size: 0.84rem;
+}

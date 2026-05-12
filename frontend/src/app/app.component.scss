@@ -1,0 +1,743 @@
+$ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
+$sidebar-width: 380px;
+$breakpoint-mobile: 768px;
+// Below this width, the two on-map legends would overlap, so the inactive
+// one collapses to a title-only pill at its corner. Measured empirically.
+$breakpoint-legend-collapse: 1055px;
+
+.app-shell {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.map-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+
+  #compare-container {
+    position: absolute;
+    inset: 0;
+  }
+
+  #map-left,
+  #map-right {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    filter: contrast(0.96) saturate(0.9);
+  }
+
+  &.is-loading {
+    #map-left,
+    #map-right {
+      visibility: hidden;
+    }
+  }
+
+  .skeleton {
+    position: absolute;
+    inset: 0;
+    background: var(--surface-base);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+  }
+
+  .skeleton-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--border-subtle);
+    border-top-color: var(--text-faint);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .error-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-scrim);
+  }
+
+  .zones-loading-overlay,
+  .zones-error-overlay {
+    position: absolute;
+    top: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    pointer-events: none;
+
+    // Sitting on top of a busy map, the chip needs more weight than the
+    // sidebar-tuned global chip styling provides. Push the container token
+    // to the densest dark glass, the outline to the strongest border, and
+    // drop a panel-grade shadow under it.
+    --mdc-chip-elevated-container-color:          var(--surface-panel);
+    --mdc-chip-elevated-selected-container-color: var(--surface-panel);
+    --mdc-chip-outline-color:                     var(--border-strong);
+    --mdc-chip-label-text-color:                  var(--text-strong);
+
+    ::ng-deep .mat-mdc-chip {
+      box-shadow: var(--shadow-panel);
+    }
+  }
+
+  .zones-error-overlay {
+    max-width: min(560px, calc(100% - 44px));
+
+    ::ng-deep .mat-mdc-chip,
+    ::ng-deep .mat-mdc-standard-chip {
+      height: auto;
+      white-space: normal;
+      word-break: break-word;
+    }
+
+    ::ng-deep .mdc-evolution-chip__text-label,
+    ::ng-deep .mat-mdc-chip-action-label {
+      white-space: normal;
+      overflow-wrap: anywhere;
+      line-height: 1.35;
+      padding: 6px 0;
+    }
+  }
+
+  // Map-floating positioning only; visual styles live in the top-level .legend
+  // rule below so the sidebar copy (mobile) can reuse them.
+  .legend {
+    position: absolute;
+    bottom: 22px;
+    z-index: 17;
+    pointer-events: none;
+    box-shadow: var(--shadow-card);
+  }
+
+  .legend-left  { left: 22px; }
+  .legend-right { right: 22px; }
+}
+
+.legend {
+  padding: 10px 14px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--radius-md);
+  color: var(--text-strong);
+  font-size: 0.78rem;
+
+  .legend-title {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-mute);
+    margin-bottom: 6px;
+  }
+
+  .legend-bins {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .bin {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    min-width: 168px;
+  }
+
+  .swatch {
+    display: block;
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-input);
+  }
+
+  .bin.no-data .swatch {
+    background: repeating-linear-gradient(
+      45deg,
+      var(--nodata-stripe-dark) 0 3px,
+      var(--nodata-stripe-light) 3px 8px
+    );
+  }
+
+  .label {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    font-size: 0.72rem;
+    color: var(--text);
+    line-height: 1.15;
+  }
+
+  .label-name {
+    font-weight: 500;
+    color: var(--text-strong);
+  }
+
+  .label-range {
+    font-variant-numeric: tabular-nums;
+    font-size: 0.68rem;
+    color: var(--text-faint);
+  }
+}
+
+.sidebar {
+  flex-shrink: 0;
+  width: $sidebar-width;
+  background: var(--surface-sidebar);
+  border-left: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  color: var(--text-strong);
+  z-index: 15;
+}
+
+.sidebar-header {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+
+  .sidebar-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .wordmark {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    .wordmark-logo {
+      width: 40px;
+      height: 40px;
+      display: block;
+      flex-shrink: 0;
+    }
+
+    .wordmark-text {
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: -0.005em;
+      color: var(--brand-strong);
+    }
+  }
+
+  .layer-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: var(--input-height);
+    padding: 0 12px;
+    background: var(--surface-input-strong);
+    border: 1px solid var(--border-input);
+    border-radius: var(--radius-md);
+    color: var(--text-strong);
+    font-family: inherit;
+    font-size: 0.82rem;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      line-height: 18px;
+      color: var(--brand-strong);
+    }
+
+    &:hover {
+      border-color: var(--border-strong);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--brand-focus);
+      outline-offset: 2px;
+    }
+  }
+}
+
+.sidebar-section {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  & + .sidebar-section {
+    border-top: 1px solid var(--border-subtle);
+  }
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-faint);
+
+  mat-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    line-height: 14px;
+  }
+}
+
+.search-section {
+  .search-field {
+    width: 100%;
+
+    // Background sits outside Material's token surface, so it stays here.
+    // Height + label positioning are driven globally by the form-field density
+    // tokens in styles.scss; we don't override the infix here.
+    ::ng-deep .mat-mdc-text-field-wrapper {
+      background: var(--surface-input-strong);
+    }
+
+    ::ng-deep .mat-icon {
+      color: var(--text-mute);
+    }
+
+    .search-prefix {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      // Asymmetric: 12px on the left keeps the icon clear of the outline's
+      // leading curve; 4px on the right intentionally undercuts Material's
+      // default 12px so the magnifying-glass and the text read as a paired
+      // affordance instead of two separate elements.
+      padding: 0 4px 0 12px;
+      box-sizing: content-box;
+
+      .mat-icon.is-hidden {
+        visibility: hidden;
+      }
+
+      .search-prefix-spinner {
+        position: absolute;
+        inset: 0;
+        margin: auto;
+      }
+    }
+  }
+}
+
+// Custom highlight markup (.opt-country, <strong>) lives here; background,
+// radius, and option hover/active state-layer are driven globally by
+// mat.autocomplete-overrides and mat.option-overrides in styles.scss.
+::ng-deep .search-panel.mat-mdc-autocomplete-panel {
+  border: 1px solid var(--border-panel);
+  box-shadow: var(--shadow-panel);
+  margin-top: 6px;
+
+  strong {
+    color: var(--brand);
+    font-weight: 600;
+  }
+
+  .opt-country {
+    margin-left: 8px;
+    color: var(--text-faint);
+    font-size: 0.85em;
+  }
+}
+
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--status-error-bg);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--radius-md);
+  color: white;
+  font-size: 0.875rem;
+  line-height: 1.4;
+
+  mat-icon {
+    flex-shrink: 0;
+  }
+
+  .error-text {
+    flex: 1;
+  }
+
+  .error-dismiss {
+    background: transparent;
+    border: 0;
+    color: var(--text);
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      line-height: 18px;
+    }
+  }
+}
+
+.selected-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface-input);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-size: 0.875rem;
+
+  mat-icon {
+    flex: 0 0 auto;
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    color: var(--brand-strong);
+  }
+
+  // Long display names must not wrap: a second line would grow the sidebar
+  // and resize the map, interrupting MapLibre's flyTo animation.
+  span {
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // Empty-state placeholder: keep the chip fully laid out so the sidebar
+  // doesn't reflow when a city is picked / cleared, but dim the dash so it
+  // reads as "no value" rather than as the actual city name.
+  &.is-empty {
+    color: var(--text-dim);
+
+    mat-icon {
+      color: var(--brand-mute);
+    }
+  }
+}
+
+.year-select {
+  width: 100%;
+
+  // Background sits outside Material's token surface. Height + label
+  // positioning are driven globally by the form-field density tokens.
+  ::ng-deep .mat-mdc-text-field-wrapper {
+    background: var(--surface-input);
+  }
+
+  // Tabular-numbers + tighter type for the four-digit year only — purely
+  // typographic, not a token slot.
+  ::ng-deep .mat-mdc-select-value-text {
+    font-variant-numeric: tabular-nums;
+    font-size: 0.9rem;
+    letter-spacing: 0.02em;
+  }
+}
+
+// Tabular-numbers for year digits live here; the panel background/radius
+// and option hover/selected state-layers are driven globally by
+// mat.select-overrides + mat.option-overrides in styles.scss.
+::ng-deep .year-select-panel.mat-mdc-select-panel {
+  border: 1px solid var(--border-panel);
+  box-shadow: var(--shadow-panel);
+
+  .mat-mdc-option {
+    font-variant-numeric: tabular-nums;
+
+    &.mdc-list-item--selected .mdc-list-item__primary-text {
+      font-weight: 600;
+    }
+  }
+}
+
+@media (max-width: $breakpoint-mobile) {
+  .app-shell {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    order: 0;
+    width: auto;
+    max-height: 60vh;
+    border-left: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .map-wrap {
+    order: 1;
+    flex: 1 1 auto;
+  }
+
+  .sidebar-header {
+    padding: 14px 16px 12px;
+  }
+
+  .sidebar-section {
+    padding: 12px 16px;
+  }
+
+  .zones-loading-overlay,
+  .zones-error-overlay {
+    top: 12px;
+  }
+}
+
+// Hidden by default; only the mobile media query below shows it.
+.legend-mobile {
+  display: none;
+}
+
+// Below 1055px the two corner legends would collide. Hide them entirely and
+// show one bottom-anchored card with an explicit segmented-control toggle
+// (Heat | Vegetation) at the top — an unmistakable "pick one" affordance.
+@media (max-width: $breakpoint-legend-collapse) {
+  .map-wrap .legend-left,
+  .map-wrap .legend-right {
+    display: none;
+  }
+
+  .legend-mobile {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 14px;
+    z-index: 17;
+    pointer-events: auto;
+
+    display: flex;
+    flex-direction: column;
+    background: var(--surface-card);
+    border: 1px solid var(--border-panel);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    color: var(--text-strong);
+    overflow: hidden;
+  }
+
+  // Tablet / narrow desktop (769 – 1055 px): legend is always visible as a
+  // floating card. The bottom-sheet handle is only meaningful on phones —
+  // hide it here and force the content fully expanded. The ≤ 768 px rules
+  // below in the file re-override these for the phone bottom-sheet.
+  .legend-sheet-handle {
+    display: none;
+  }
+  .legend-sheet-content {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .legend-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--state-rest);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .legend-toggle-btn {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: var(--text-faint);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    padding: 10px 12px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: background 0.18s $ease-out-expo,
+                color 0.18s $ease-out-expo,
+                box-shadow 0.18s $ease-out-expo;
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      line-height: 18px;
+    }
+
+    &:hover:not(.is-active) {
+      color: var(--text);
+      background: var(--state-hover);
+    }
+
+    &.is-active {
+      color: var(--text-strong);
+      background: var(--brand-active);
+      box-shadow: inset 0 -2px 0 var(--brand-focus);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--brand-focus);
+      outline-offset: -2px;
+    }
+
+    & + & {
+      border-left: 1px solid var(--border-subtle);
+    }
+  }
+
+  .legend-body {
+    padding: 10px 14px;
+
+    .legend-title {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-mute);
+      margin-bottom: 6px;
+    }
+
+    .legend-bins {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .bin {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .swatch {
+      flex: 0 0 28px;
+      width: 28px;
+      height: 16px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-input);
+    }
+
+    .bin.no-data .swatch {
+      background: repeating-linear-gradient(
+        45deg,
+        var(--nodata-stripe-dark) 0 3px,
+        var(--nodata-stripe-light) 3px 8px
+      );
+    }
+
+    .label {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      font-size: 0.74rem;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .label-name {
+      font-weight: 500;
+      color: var(--text-strong);
+    }
+
+    .label-range {
+      font-variant-numeric: tabular-nums;
+      font-size: 0.68rem;
+      color: var(--text-faint);
+    }
+  }
+}
+
+// On phones the floating card eats half the small map. Turn the legend into
+// a bottom sheet that's closed by default — only a thin handle bar is
+// visible at the bottom, and the body slides up when the user taps it.
+// Placed AFTER the 1055px block so its overrides win the cascade.
+@media (max-width: $breakpoint-mobile) {
+  .legend-mobile {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+    border-top: 1px solid var(--border-panel);
+    box-shadow: var(--shadow-sheet);
+    max-width: none;
+  }
+
+  .legend-sheet-handle {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    width: 100%;
+    color: var(--text-strong);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 12px 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: background 0.15s $ease-out-expo;
+
+    mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      line-height: 20px;
+    }
+
+    &:hover {
+      background: var(--state-hover);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--brand-focus);
+      outline-offset: -2px;
+    }
+  }
+
+  .legend-sheet-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.28s $ease-out-expo;
+  }
+
+  .legend-mobile.is-open .legend-sheet-content {
+    max-height: 60vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}

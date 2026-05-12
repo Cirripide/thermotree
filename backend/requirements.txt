@@ -1,0 +1,18 @@
+# Web Framework
+fastapi
+uvicorn[standard]
+pydantic-settings
+httpx
+
+# Geospatial & Data Science
+rasterio
+rasterstats
+geopandas
+shapely
+
+# STAC & cloud-native imagery access
+pystac-client
+planetary-computer
+
+# Windowed COG reads (xarray semantics over rasterio /vsicurl)
+rioxarray

@@ -1,0 +1,224 @@
+@use '@angular/material' as mat;
+
+@import 'maplibre-gl/dist/maplibre-gl.css';
+@import '@maplibre/maplibre-gl-compare/style.css';
+
+// ──────────────────────────────────────────────────────────────────────
+// Theme tokens — single source of truth.
+// Change a base RGB triplet here and every derived alpha follows.
+// ──────────────────────────────────────────────────────────────────────
+:root {
+  /* ── Brand (canopy emerald — "Living Canopy") ──────────────── */
+  --brand-rgb:    45 110 78;                       // #2D6E4E canopy emerald
+  --brand:        rgb(var(--brand-rgb));
+  --brand-strong: rgb(var(--brand-rgb) / 1.00);    // icons / wordmark / caret
+  --brand-focus:  rgb(31 132 85 / 1.00);           // #1F8455 spring leaf — discrete focus color, ≥3:1 vs surface
+  --brand-mute:   rgb(var(--brand-rgb) / 0.55);    // dimmed icon (empty state)
+  --brand-active: rgb(var(--brand-rgb) / 0.16);    // selected option bg
+  --brand-soft:   rgb(var(--brand-rgb) / 0.09);    // hover option bg
+
+  /* ── Accent (golden hour amber — sparing, never small-text) ── */
+  --accent-rgb:   184 128 74;                      // #B8804A golden hour
+  --accent:       rgb(var(--accent-rgb));
+
+  /* ── Surface (warm bone, single hue, alpha-derived layers) ─── */
+  --surface-rgb:          252 250 244;                       // #FCFAF4 ivory
+  --surface-base:         #F6F2EA;                           // page bg, warm bone
+  --surface-input:        rgb(var(--surface-rgb) / 0.65);    // year select
+  --surface-input-strong: rgb(var(--surface-rgb) / 0.85);    // search field
+  --surface-card:         rgb(var(--surface-rgb));           // floating legend card — fully opaque so basemap detail doesn't bleed through
+  --surface-sidebar:      rgb(var(--surface-rgb) / 0.94);    // right-side sidebar
+  --surface-panel:        rgb(var(--surface-rgb) / 0.98);    // dropdown overlays
+  --surface-scrim:        rgb(26 34 24 / 0.45);              // loam scrim, not black
+
+  /* ── Text (warm ink "loam", never pure black) ──────────────── */
+  --text-strong: rgb(26 34 24 / 1.00);    // #1A2218 loam, primary
+  --text:        rgb(26 34 24 / 0.90);    // body
+  --text-mute:   rgb(26 34 24 / 0.75);    // labels
+  --text-faint:  rgb(26 34 24 / 0.62);    // section titles, ranges
+  --text-dim:    rgb(26 34 24 / 0.50);    // empty-state placeholder
+
+  /* ── Borders / dividers (loam at low intensity) ────────────── */
+  --border-subtle: rgb(26 34 24 / 0.08);  // sidebar dividers
+  --border-panel:  rgb(26 34 24 / 0.12);  // floating cards, swatches
+  --border-input:  rgb(26 34 24 / 0.18);  // input outlines (resting)
+  --border-strong: rgb(26 34 24 / 0.32);  // input outlines (hover)
+
+  /* ── State layers (loam, not white) ────────────────────────── */
+  --state-rest:  rgb(26 34 24 / 0.03);    // tab-bar resting bg
+  --state-hover: rgb(26 34 24 / 0.06);    // toggle-btn hover bg
+
+  /* ── Status ────────────────────────────────────────────────── */
+  --status-error-bg: rgb(162 61 46 / 0.92);   // #A23D2E soft clay
+
+  /* ── No-data hatch (legend swatch for missing data on bone) ── */
+  --nodata-stripe-dark:  #9B9989;          // silvered olive
+  --nodata-stripe-light: #E5E0D2;          // pale linen
+
+  /* ── Geometry ──────────────────────────────────────────────── */
+  --radius-sm:    3px;     // palette swatches
+  --radius-md:    10px;    // inputs, cards, banners — house radius
+  --input-height: 40px;
+
+  /* ── Effects (loam-tinted shadows, never black) ────────────── */
+  --shadow-panel: 0 16px 36px rgb(26 34 24 / 0.14), 0 2px 6px rgb(26 34 24 / 0.08);
+  --shadow-card:  0 8px  20px rgb(26 34 24 / 0.10), 0 1px 3px rgb(26 34 24 / 0.06);
+  --shadow-sheet: 0 -10px 28px rgb(26 34 24 / 0.14);
+}
+
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: Inter, "Helvetica Neue", sans-serif;
+  font-feature-settings: "ss01", "cv11";
+  background: var(--surface-base);
+  color: var(--text-strong);
+}
+
+// Material 19's prebuilt theme sets every `--mat-sys-*-font` system token to
+// `Roboto` on the `html` element. MDC components (form-field input, label,
+// select trigger, option, dialog title, etc.) read those tokens instead of
+// inheriting from `body`, so the body font swap alone leaves the inputs on
+// Roboto. Pin every typography slot to Inter so Material chrome matches the
+// rest of the UI. Inherits weight/size from the prebuilt theme; we only
+// override the family.
+:root {
+  --mat-sys-body-large-font:      Inter, "Helvetica Neue", sans-serif;
+  --mat-sys-body-medium-font:     Inter, "Helvetica Neue", sans-serif;
+  --mat-sys-body-small-font:      Inter, "Helvetica Neue", sans-serif;
+  --mat-sys-display-large-font:   Inter, "Helvetica Neue", sans-serif;
+  --mat-sys-display-medium-font:  Inter, "Helvetica Neue", sans-serif;
+  --mat-sys-display-small-font:   Inter, "Helvetica Neue", sans-serif;
+  --mat-sys-headline-large-font:  Inter, "Helvetica Neue", sans-serif;
+  --mat-sys-headline-medium-font: Inter, "Helvetica Neue", sans-serif;
+  --mat-sys-headline-small-font:  Inter, "Helvetica Neue", sans-serif;
+  --mat-sys-label-large-font:     Inter, "Helvetica Neue", sans-serif;
+  --mat-sys-label-medium-font:    Inter, "Helvetica Neue", sans-serif;
+  --mat-sys-label-small-font:     Inter, "Helvetica Neue", sans-serif;
+  --mat-sys-title-large-font:     Inter, "Helvetica Neue", sans-serif;
+  --mat-sys-title-medium-font:    Inter, "Helvetica Neue", sans-serif;
+  --mat-sys-title-small-font:     Inter, "Helvetica Neue", sans-serif;
+}
+
+// Display utility for the sidebar wordmark and dialog titles — a softer,
+// botanical-encyclopedia serif that pairs with the bone/emerald palette
+// without imposing itself on body copy or legend numerals.
+.display {
+  font-family: "Cormorant Garamond", Georgia, serif;
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Form-field density — matches mat.form-field-density(-4) output (40 px).
+// At this density Material recomputes floating-label positioning from
+// these tokens, so component SCSS does not pad the infix manually.
+// ──────────────────────────────────────────────────────────────────────
+:root {
+  --mat-form-field-container-height:                          var(--input-height);
+  --mat-form-field-container-vertical-padding:                8px;
+  --mat-form-field-filled-with-label-container-padding-top:   8px;
+  --mat-form-field-filled-with-label-container-padding-bottom: 8px;
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Material 19 component overrides — replaces ::ng-deep against MDC innards.
+// Sass mixins emit the right --mdc-*/--mat-* CSS custom properties globally.
+// ──────────────────────────────────────────────────────────────────────
+:root {
+  @include mat.form-field-overrides((
+    outlined-outline-color:           var(--border-input),
+    outlined-hover-outline-color:     var(--border-strong),
+    outlined-focus-outline-color:     var(--brand-focus),
+    outlined-label-text-color:        var(--text-mute),
+    outlined-focus-label-text-color:  var(--brand-strong),
+    outlined-input-text-color:        var(--text-strong),
+    outlined-caret-color:             var(--brand-strong),
+    outlined-container-shape:         var(--radius-md),
+    enabled-select-arrow-color:       var(--text-mute),
+    focus-select-arrow-color:         var(--brand-strong),
+  ));
+
+  @include mat.select-overrides((
+    enabled-trigger-text-color: var(--text-strong),
+    placeholder-text-color:     var(--text-mute),
+    enabled-arrow-color:        var(--text-mute),
+    focused-arrow-color:        var(--brand-strong),
+    panel-background-color:     var(--surface-panel),
+  ));
+
+  // Disabled-state tokens for form fields + select. The Material override
+  // mixins silently drop these because their M2 default values resolve to
+  // null in the placeholder color theme used for slot definitions
+  // (`_token-utils.scss::batch-create-token-values` -> `_filter-nulls`).
+  // We set the underlying CSS custom properties directly so the inputs stay
+  // legible on the dark-glass background while locked during a load, but
+  // visibly dimmer than the enabled state so the disabled affordance reads
+  // clearly. Opacity tokens are pinned to 1 to stop Material's default
+  // ~38% wash from compounding on top of our color choices.
+  --mdc-outlined-text-field-disabled-outline-color: var(--border-input);
+  --mdc-outlined-text-field-disabled-input-text-color: var(--text-mute);
+  --mdc-outlined-text-field-disabled-label-text-color: var(--text-dim);
+  --mdc-outlined-text-field-disabled-leading-icon-color: var(--text-dim);
+  --mdc-outlined-text-field-disabled-input-text-opacity: 1;
+  --mdc-outlined-text-field-disabled-label-text-opacity: 1;
+  --mdc-outlined-text-field-disabled-outline-opacity: 1;
+  --mat-select-disabled-trigger-text-color: var(--text-mute);
+  --mat-select-disabled-arrow-color: var(--text-dim);
+
+  @include mat.option-overrides((
+    label-text-color:                var(--text-strong),
+    selected-state-label-text-color: var(--text-strong),
+    hover-state-layer-color:         var(--brand-soft),
+    focus-state-layer-color:         var(--brand-soft),
+    selected-state-layer-color:      var(--brand-active),
+  ));
+
+  @include mat.autocomplete-overrides((
+    background-color: var(--surface-panel),
+    container-shape:  var(--radius-md),
+  ));
+
+  @include mat.chips-overrides((
+    outline-color:                     var(--border-input),
+    focus-outline-color:               var(--brand-focus),
+    label-text-color:                  var(--text-strong),
+    elevated-container-color:          var(--surface-input-strong),
+    elevated-selected-container-color: var(--brand-active),
+    selected-label-text-color:         var(--text-strong),
+    container-shape-radius:            var(--radius-md),
+  ));
+
+  // Brand-orange progress spinner — the prebuilt theme paints it azure-blue
+  // otherwise. Affects both the search-field suffix spinner and the spinner
+  // inside the "Building heat & vegetation grid…" chip.
+  @include mat.progress-spinner-overrides((
+    active-indicator-color: var(--brand),
+  ));
+
+  // MatDialog renders into the CDK overlay (outside the component tree), so
+  // its surface tokens must be set globally. The about dialog opts in via
+  // `panelClass: 'about-dialog-panel'`.
+  @include mat.dialog-overrides((
+    container-color:       var(--surface-panel),
+    container-shape:       var(--radius-md),
+    subhead-color:         var(--text-strong),
+    supporting-text-color: var(--text),
+  ));
+}
+
+// CDK overlay backdrop behind the about dialog — match the map-load scrim so
+// the dialog reads as a layer above the dark glass UI rather than an
+// out-of-theme white sheet.
+.cdk-overlay-backdrop.cdk-overlay-dark-backdrop {
+  background: var(--surface-scrim);
+}
+
+.about-dialog-panel {
+  .mat-mdc-dialog-surface {
+    border: 1px solid var(--border-panel);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .mat-mdc-dialog-content {
+    padding: 0;
+  }
+}
