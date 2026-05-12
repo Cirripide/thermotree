@@ -1,7 +1,8 @@
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 import os
 
@@ -55,7 +56,12 @@ class Settings(BaseSettings):
     # mirror; Element84 is kept as a fallback for transport-level failures
     # only (timeouts, 5xx, connection errors) — not for empty results or
     # quality rejections.
-    stac_providers: list[str] = DEFAULT_STAC_PROVIDERS
+    # NoDecode: env source must NOT json.loads the raw env value. The
+    # validator below handles the comma-separated format that env-var
+    # consumers naturally pass ("a,b" rather than '["a","b"]'). Without
+    # NoDecode, pydantic-settings crashes on `STAC_PROVIDERS=""` before
+    # the validator ever runs.
+    stac_providers: Annotated[list[str], NoDecode] = DEFAULT_STAC_PROVIDERS
     summer_window_start: str = "06-01"
     summer_window_end: str = "08-31"
 
