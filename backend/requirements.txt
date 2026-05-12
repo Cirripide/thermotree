@@ -1,7 +1,7 @@
 # Web Framework
 fastapi
 uvicorn[standard]
-pydantic-settings
+pydantic-settings>=2.2,<3
 httpx
 
 # Geospatial & Data Science

@@ -117,10 +117,35 @@ sensible defaults and don't need to be set in GitHub.
 | Variable | Value |
 |---|---|
 | `ACR_NAME` | `crthermotreepoc01` |
+| `PUBLIC_API_URL` (optional) | `/api/` (default — leave unset). Set to an absolute URL like `https://api.thermotree.com/api/` only after completing the prerequisites in "Switching to an absolute `PUBLIC_API_URL`" below. |
 
 The placeholder defaults in `backend/app/core/config.py` technically
 work but violate both providers' fair-use policies — use a real contact
 email in the user-agent secrets.
+
+### Switching to an absolute `PUBLIC_API_URL`
+
+Default behavior: the Angular app uses the relative URL `/api/` and the
+frontend container's nginx (`frontend/nginx.conf.template`) reverse-proxies
+it to the backend's internal FQDN. Single origin, no CORS, backend stays
+private. **Don't change `PUBLIC_API_URL` unless you also do all three of
+the following** — otherwise the browser will start hitting a backend host
+that's either unreachable or rejecting its requests:
+
+1. **Make the backend publicly reachable.** Flip `infra/main.bicep` line ~130
+   from `external: false` to `external: true`, redeploy, then bind a custom
+   hostname + managed cert to `ca-backend` (`az containerapp hostname add`).
+2. **Enable CORS in the backend.** Add `CORSMiddleware` to `backend/app/main.py`
+   with the frontend's exact origin (e.g. `https://www.thermotree.com`) in
+   `allow_origins`.
+3. **DNS.** Point the chosen backend hostname (e.g. `api.thermotree.com`) at
+   the backend's external FQDN via CNAME.
+
+Then set `PUBLIC_API_URL` in `Settings → Variables → Actions` to the full
+absolute URL (with trailing slash, matching the existing literal:
+`https://api.thermotree.com/api/`) and re-run the workflow. The
+`build-frontend` job bakes the new value into `environment.ts` at build
+time.
 
 ### 4. First workflow run
 

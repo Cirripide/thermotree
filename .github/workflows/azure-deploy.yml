@@ -248,6 +248,7 @@ jobs:
           provenance: false
           build-args: |
             NODE_VER=${{ steps.node.outputs.node_ver }}
+            PUBLIC_API_URL=${{ vars.PUBLIC_API_URL || '/api/' }}
           tags: |
             ${{ steps.image.outputs.image }}
             ${{ needs.infra-foundation.outputs.acr_login_server }}/${{ env.FRONTEND_IMAGE_REPO }}:latest

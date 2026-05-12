@@ -15,6 +15,14 @@ RUN npm ci --no-audit --no-fund
 
 COPY . .
 
+# Bake the public API base URL into environment.ts before bundling.
+# Default `/api/` preserves the single-origin nginx-proxy model (the
+# frontend container's nginx forwards /api/ to ${UPSTREAM_BACKEND}).
+# Override at build time to point the browser at an absolute backend
+# URL — requires the backend to be publicly reachable + CORS enabled.
+ARG PUBLIC_API_URL=/api/
+RUN sed -i "s|apiBaseUrl: '/api/'|apiBaseUrl: '${PUBLIC_API_URL}'|g" src/environments/environment.ts
+
 # Production build. defaultConfiguration is already "production" in
 # angular.json, but pinning it explicitly here prevents a silent flip
 # if that default ever changes.

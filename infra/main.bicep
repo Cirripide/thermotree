@@ -180,9 +180,10 @@ resource backend 'Microsoft.App/containerApps@2024-03-01' = if (deployContainerA
           env: concat([
             { name: 'NOMINATIM_USER_AGENT', secretRef: 'nominatim-user-agent' }
             { name: 'PHOTON_USER_AGENT', secretRef: 'photon-user-agent' }
-            { name: 'STAC_PROVIDERS', value: stacProviders }
             { name: 'UVICORN_WORKERS', value: uvicornWorkers }
             { name: 'PORT', value: '8000' }
+          ], empty(stacProviders) ? [] : [
+            { name: 'STAC_PROVIDERS', value: stacProviders }
           ], empty(locationIqApiKey) ? [] : [
             { name: 'LOCATIONIQ_API_KEY', secretRef: 'locationiq-api-key' }
           ])
