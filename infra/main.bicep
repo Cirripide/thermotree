@@ -287,7 +287,7 @@ resource frontend 'Microsoft.App/containerApps@2024-03-01' = if (deployContainer
           env: [
             {
               name: 'UPSTREAM_BACKEND'
-              value: '${backend.name}.internal.${cae.properties.defaultDomain}:8000'
+              value: '${backend.name}.internal.${cae.properties.defaultDomain}'
             }
           ]
           probes: [
