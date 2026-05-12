@@ -1,12 +1,20 @@
 # GitHub Actions workflow for Thermotree → Azure Container Apps.
 #
+# Two-pass infra: ACR/CAE/LogAnalytics come up first, images are built next,
+# then Container Apps are created with real images from the start. No
+# placeholder revision ever runs, so the historical "Activation failed →
+# Operation expired" race against ACA's revision health check is gone.
+#
 # Jobs:
-#   1. validate        — bicep build + what-if (PR + main).
-#   2. infra           — az deployment group create (idempotent, main only).
-#   3. build-backend   ┐
-#   4. build-frontend  ┘ parallel buildx → ACR (main only).
-#   5. deploy-backend  — az containerapp secret set + update --image.
-#   6. deploy-frontend — az containerapp update --image + UPSTREAM_BACKEND.
+#   1. validate          — bicep build + what-if (PR + main, foundation-only).
+#   2. infra-foundation  — ACR + CAE + Log Analytics. No Container Apps.
+#   3. build-backend     ┐
+#   4. build-frontend    ┘ parallel buildx → ACR (main only).
+#   5. infra-apps        — Container Apps + AcrPull roles, with the freshly
+#                          built SHA-tagged images. Bicep also injects the
+#                          user-agent + LocationIQ secrets and the frontend
+#                          UPSTREAM_BACKEND env var, so no separate deploy
+#                          step is needed.
 #
 # PRs run validate only. No ACR pushes, no infra changes, no deploys.
 #
@@ -38,8 +46,8 @@ env:
   BICEP_PARAMS: infra/main.parameters.json
   BACKEND_IMAGE_REPO: thermotree-backend
   FRONTEND_IMAGE_REPO: thermotree-frontend
-  # Full 40-char commit SHA — immutable, traceable. Deploy targets this tag,
-  # not :latest, so the running revision is always identifiable.
+  # Full 40-char commit SHA — immutable, traceable. Bicep deploys this
+  # tag directly, so the running revision is always identifiable.
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
@@ -72,7 +80,10 @@ jobs:
           az bicep build --file "$BICEP_FILE" --stdout > /dev/null
           echo "Bicep compiled cleanly."
 
-      - name: az deployment what-if (preview)
+      # foundation-only preview: deployContainerApps=false matches what the
+      # infra-foundation job will actually do, and avoids needing the real
+      # image params (which don't exist on PR-time).
+      - name: az deployment what-if (foundation preview)
         if: github.event.pull_request.head.repo.fork != true
         run: |
           set -euo pipefail
@@ -84,6 +95,7 @@ jobs:
             --parameters nominatimUserAgent="${{ secrets.NOMINATIM_USER_AGENT }}" \
             --parameters photonUserAgent="${{ secrets.PHOTON_USER_AGENT }}" \
             --parameters locationIqApiKey="${{ secrets.LOCATIONIQ_API_KEY }}" \
+            --parameters deployContainerApps=false \
             || echo "what-if produced a diff (expected on infra changes)."
 
       # Fallback for fork PRs: lint-only bicep build (no Azure session needed
@@ -99,20 +111,19 @@ jobs:
             echo "Bicep compiled cleanly (fork PR — what-if skipped)."
 
   # =========================================================================
-  # 2. Infra — main only. Outputs flow into Build/Deploy via job outputs.
+  # 2. Foundation infra — ACR + CAE + Log Analytics. main only.
+  #
+  # Skips Container Apps via `deployContainerApps=false` so this pass can
+  # complete before any image exists in ACR. Outputs the ACR login server
+  # for the build jobs.
   # =========================================================================
-  infra:
-    name: Infra (Bicep)
+  infra-foundation:
+    name: Infra foundation (ACR + CAE)
     needs: validate
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     outputs:
       acr_login_server: ${{ steps.deploy.outputs.acr_login_server }}
-      env_default_domain: ${{ steps.deploy.outputs.env_default_domain }}
-      backend_internal_fqdn: ${{ steps.deploy.outputs.backend_internal_fqdn }}
-      ca_backend_name: ${{ steps.deploy.outputs.ca_backend_name }}
-      ca_frontend_name: ${{ steps.deploy.outputs.ca_frontend_name }}
-      frontend_fqdn: ${{ steps.deploy.outputs.frontend_fqdn }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -125,12 +136,12 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Deploy infra
+      - name: Deploy foundation
         id: deploy
         run: |
           set -euo pipefail
 
-          deployment_name="thermotree-${{ github.run_id }}"
+          deployment_name="thermotree-foundation-${{ github.run_id }}"
 
           az deployment group create \
             --name "$deployment_name" \
@@ -141,35 +152,35 @@ jobs:
             --parameters nominatimUserAgent="${{ secrets.NOMINATIM_USER_AGENT }}" \
             --parameters photonUserAgent="${{ secrets.PHOTON_USER_AGENT }}" \
             --parameters locationIqApiKey="${{ secrets.LOCATIONIQ_API_KEY }}" \
+            --parameters deployContainerApps=false \
             --output none
 
           outputs=$(az deployment group show \
             -g "$RG_NAME" -n "$deployment_name" \
             --query properties.outputs -o json)
 
-          {
-            echo "acr_login_server=$(echo "$outputs"      | jq -r '.acrLoginServer.value')"
-            echo "env_default_domain=$(echo "$outputs"    | jq -r '.envDefaultDomain.value')"
-            echo "backend_internal_fqdn=$(echo "$outputs" | jq -r '.backendInternalFqdn.value')"
-            echo "ca_backend_name=$(echo "$outputs"       | jq -r '.backendAppName.value')"
-            echo "ca_frontend_name=$(echo "$outputs"      | jq -r '.frontendAppName.value')"
-            echo "frontend_fqdn=$(echo "$outputs"         | jq -r '.frontendFqdn.value')"
-          } >> "$GITHUB_OUTPUT"
-
-          echo "Frontend will be reachable at: https://$(echo "$outputs" | jq -r '.frontendFqdn.value')"
+          echo "acr_login_server=$(echo "$outputs" | jq -r '.acrLoginServer.value')" >> "$GITHUB_OUTPUT"
 
   # =========================================================================
   # 3. Build — backend + frontend in parallel.
+  # Each job exposes the full image reference as `outputs.image` so the
+  # apps pass can deploy by SHA-tagged ref.
   # =========================================================================
   build-backend:
     name: Build backend image
-    needs: infra
+    needs: infra-foundation
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.image.outputs.image }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
+
+      - name: Compose image reference
+        id: image
+        run: echo "image=${{ needs.infra-foundation.outputs.acr_login_server }}/${{ env.BACKEND_IMAGE_REPO }}:${{ env.IMAGE_TAG }}" >> "$GITHUB_OUTPUT"
 
       - name: Azure login (OIDC)
         uses: azure/login@v2
@@ -191,20 +202,26 @@ jobs:
           push: true
           provenance: false
           tags: |
-            ${{ needs.infra.outputs.acr_login_server }}/${{ env.BACKEND_IMAGE_REPO }}:${{ env.IMAGE_TAG }}
-            ${{ needs.infra.outputs.acr_login_server }}/${{ env.BACKEND_IMAGE_REPO }}:latest
-          cache-from: type=registry,ref=${{ needs.infra.outputs.acr_login_server }}/${{ env.BACKEND_IMAGE_REPO }}:buildcache
-          cache-to: type=registry,ref=${{ needs.infra.outputs.acr_login_server }}/${{ env.BACKEND_IMAGE_REPO }}:buildcache,mode=max
+            ${{ steps.image.outputs.image }}
+            ${{ needs.infra-foundation.outputs.acr_login_server }}/${{ env.BACKEND_IMAGE_REPO }}:latest
+          cache-from: type=registry,ref=${{ needs.infra-foundation.outputs.acr_login_server }}/${{ env.BACKEND_IMAGE_REPO }}:buildcache
+          cache-to: type=registry,ref=${{ needs.infra-foundation.outputs.acr_login_server }}/${{ env.BACKEND_IMAGE_REPO }}:buildcache,mode=max
 
   build-frontend:
     name: Build frontend image
-    needs: infra
+    needs: infra-foundation
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.image.outputs.image }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
+
+      - name: Compose image reference
+        id: image
+        run: echo "image=${{ needs.infra-foundation.outputs.acr_login_server }}/${{ env.FRONTEND_IMAGE_REPO }}:${{ env.IMAGE_TAG }}" >> "$GITHUB_OUTPUT"
 
       - name: Read Node version from .nvmrc
         id: node
@@ -232,21 +249,28 @@ jobs:
           build-args: |
             NODE_VER=${{ steps.node.outputs.node_ver }}
           tags: |
-            ${{ needs.infra.outputs.acr_login_server }}/${{ env.FRONTEND_IMAGE_REPO }}:${{ env.IMAGE_TAG }}
-            ${{ needs.infra.outputs.acr_login_server }}/${{ env.FRONTEND_IMAGE_REPO }}:latest
-          cache-from: type=registry,ref=${{ needs.infra.outputs.acr_login_server }}/${{ env.FRONTEND_IMAGE_REPO }}:buildcache
-          cache-to: type=registry,ref=${{ needs.infra.outputs.acr_login_server }}/${{ env.FRONTEND_IMAGE_REPO }}:buildcache,mode=max
+            ${{ steps.image.outputs.image }}
+            ${{ needs.infra-foundation.outputs.acr_login_server }}/${{ env.FRONTEND_IMAGE_REPO }}:latest
+          cache-from: type=registry,ref=${{ needs.infra-foundation.outputs.acr_login_server }}/${{ env.FRONTEND_IMAGE_REPO }}:buildcache
+          cache-to: type=registry,ref=${{ needs.infra-foundation.outputs.acr_login_server }}/${{ env.FRONTEND_IMAGE_REPO }}:buildcache,mode=max
 
   # =========================================================================
-  # 4. Deploy — flip both container apps to the new image.
-  # Backend first: prevents a frontend revision fronting an unhealthy backend.
+  # 4. Apps infra — Container Apps with real SHA-tagged images.
+  #
+  # Bicep handles everything: image, user-agent + LocationIQ secrets,
+  # the frontend's UPSTREAM_BACKEND env var, and the AcrPull role
+  # assignments. No follow-up deploy job is needed.
   # =========================================================================
-  deploy-backend:
-    name: Deploy backend revision
-    needs: [ infra, build-backend, build-frontend ]
+  infra-apps:
+    name: Infra apps (Container Apps)
+    needs: [ infra-foundation, build-backend, build-frontend ]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
@@ -254,62 +278,30 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Set secrets + update image
+      - name: Deploy apps
+        id: deploy
         run: |
           set -euo pipefail
 
-          # `secret set` is additive — won't clobber other secrets.
-          # Done separately from `containerapp update` because
-          # `update --secrets` is destructive (replaces the full
-          # secret collection).
-          #
-          # LocationIQ is optional: when the GitHub secret is empty,
-          # Bicep doesn't create the `locationiq-api-key` secret nor
-          # the LOCATIONIQ_API_KEY env var — so we skip it here too,
-          # because ACA rejects empty secret values.
-          if [ -n "${{ secrets.LOCATIONIQ_API_KEY }}" ]; then
-            az containerapp secret set \
-              -g "$RG_NAME" -n "${{ needs.infra.outputs.ca_backend_name }}" \
-              --secrets \
-                nominatim-user-agent="${{ secrets.NOMINATIM_USER_AGENT }}" \
-                photon-user-agent="${{ secrets.PHOTON_USER_AGENT }}" \
-                locationiq-api-key="${{ secrets.LOCATIONIQ_API_KEY }}" \
-              --output none
-          else
-            az containerapp secret set \
-              -g "$RG_NAME" -n "${{ needs.infra.outputs.ca_backend_name }}" \
-              --secrets \
-                nominatim-user-agent="${{ secrets.NOMINATIM_USER_AGENT }}" \
-                photon-user-agent="${{ secrets.PHOTON_USER_AGENT }}" \
-              --output none
-          fi
+          deployment_name="thermotree-apps-${{ github.run_id }}"
 
-          az containerapp update \
-            -g "$RG_NAME" -n "${{ needs.infra.outputs.ca_backend_name }}" \
-            --image "${{ needs.infra.outputs.acr_login_server }}/$BACKEND_IMAGE_REPO:$IMAGE_TAG" \
+          az deployment group create \
+            --name "$deployment_name" \
+            --resource-group "$RG_NAME" \
+            --template-file "$BICEP_FILE" \
+            --parameters "$BICEP_PARAMS" \
+            --parameters acrName="${{ vars.ACR_NAME }}" \
+            --parameters nominatimUserAgent="${{ secrets.NOMINATIM_USER_AGENT }}" \
+            --parameters photonUserAgent="${{ secrets.PHOTON_USER_AGENT }}" \
+            --parameters locationIqApiKey="${{ secrets.LOCATIONIQ_API_KEY }}" \
+            --parameters deployContainerApps=true \
+            --parameters backendImage="${{ needs.build-backend.outputs.image }}" \
+            --parameters frontendImage="${{ needs.build-frontend.outputs.image }}" \
             --output none
 
-  deploy-frontend:
-    name: Deploy frontend revision
-    needs: [ infra, deploy-backend ]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Azure login (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          outputs=$(az deployment group show \
+            -g "$RG_NAME" -n "$deployment_name" \
+            --query properties.outputs -o json)
 
-      - name: Update image + UPSTREAM_BACKEND
-        run: |
-          set -euo pipefail
-
-          az containerapp update \
-            -g "$RG_NAME" -n "${{ needs.infra.outputs.ca_frontend_name }}" \
-            --image "${{ needs.infra.outputs.acr_login_server }}/$FRONTEND_IMAGE_REPO:$IMAGE_TAG" \
-            --set-env-vars UPSTREAM_BACKEND="${{ needs.infra.outputs.backend_internal_fqdn }}:8000" \
-            --output none
-
-          echo "Deployed. Frontend FQDN: https://${{ needs.infra.outputs.frontend_fqdn }}"
+          frontend_fqdn=$(echo "$outputs" | jq -r '.frontendFqdn.value')
+          echo "Deployed. Frontend FQDN: https://$frontend_fqdn"

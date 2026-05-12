@@ -33,8 +33,17 @@ param backendAppName string = 'ca-backend'
 @description('Frontend Container App name.')
 param frontendAppName string = 'ca-frontend'
 
-@description('Placeholder image for first-time provisioning. Replaced by the pipeline Deploy stage. Must be publicly pullable without auth (AcrPull MI has no effect on MCR).')
+@description('Placeholder image. Kept as a sensible default for `backendImage` / `frontendImage` when running Bicep locally, but the workflow never deploys Container Apps with this image — it skips the apps on the foundation pass and supplies real images on the apps pass.')
 param placeholderImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
+
+@description('Skip Container App + AcrPull role assignments. Set false on the foundation pass (before images are built), true on the apps pass.')
+param deployContainerApps bool = true
+
+@description('Full backend image reference (registry/repo:tag). Default = placeholder; the workflow overrides this on the apps pass with the SHA-tagged image just pushed to ACR.')
+param backendImage string = placeholderImage
+
+@description('Full frontend image reference. Same contract as backendImage.')
+param frontendImage string = placeholderImage
 
 @description('UVICORN_WORKERS for the backend. DO NOT increase: ZonesRunner concurrency cap and coalescing are per-process invariants in backend/app/core/config.py.')
 param uvicornWorkers string = '1'
@@ -85,7 +94,6 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   properties: {
     adminUserEnabled: false
     publicNetworkAccess: 'Enabled'
-    anonymousPullEnabled: false
     zoneRedundancy: 'Disabled'
   }
 }
@@ -117,7 +125,7 @@ resource cae 'Microsoft.App/managedEnvironments@2024-03-01' = {
 // ---------------------------------------------------------------------------
 // Backend Container App — internal ingress
 // ---------------------------------------------------------------------------
-resource backend 'Microsoft.App/containerApps@2024-03-01' = {
+resource backend 'Microsoft.App/containerApps@2024-03-01' = if (deployContainerApps) {
   name: backendAppName
   location: location
   identity: { type: 'SystemAssigned' }
@@ -164,7 +172,7 @@ resource backend 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'backend'
-          image: placeholderImage
+          image: backendImage
           resources: {
             cpu: json('0.5')
             memory: '1.0Gi'
@@ -238,7 +246,7 @@ resource backend 'Microsoft.App/containerApps@2024-03-01' = {
 // the environment's defaultDomain. The .internal subdomain is only
 // resolvable from inside the same Container Apps Environment.
 // ---------------------------------------------------------------------------
-resource frontend 'Microsoft.App/containerApps@2024-03-01' = {
+resource frontend 'Microsoft.App/containerApps@2024-03-01' = if (deployContainerApps) {
   name: frontendAppName
   location: location
   identity: { type: 'SystemAssigned' }
@@ -270,7 +278,7 @@ resource frontend 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'frontend'
-          image: placeholderImage
+          image: frontendImage
           resources: {
             cpu: json('0.25')
             memory: '0.5Gi'
@@ -347,7 +355,7 @@ resource frontend 'Microsoft.App/containerApps@2024-03-01' = {
 // ---------------------------------------------------------------------------
 var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 
-resource acrPullBackend 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource acrPullBackend 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployContainerApps) {
   name: guid(acr.id, backendAppName, acrPullRoleId)
   scope: acr
   properties: {
@@ -357,7 +365,7 @@ resource acrPullBackend 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
-resource acrPullFrontend 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource acrPullFrontend 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployContainerApps) {
   name: guid(acr.id, frontendAppName, acrPullRoleId)
   scope: acr
   properties: {
@@ -373,7 +381,7 @@ resource acrPullFrontend 'Microsoft.Authorization/roleAssignments@2022-04-01' = 
 output acrLoginServer string = acr.properties.loginServer
 output acrName string = acr.name
 output envDefaultDomain string = cae.properties.defaultDomain
-output backendAppName string = backend.name
-output frontendAppName string = frontend.name
-output frontendFqdn string = frontend.properties.configuration.ingress.fqdn
-output backendInternalFqdn string = '${backend.name}.internal.${cae.properties.defaultDomain}'
+output backendAppName string = deployContainerApps ? backend.name : ''
+output frontendAppName string = deployContainerApps ? frontend.name : ''
+output frontendFqdn string = deployContainerApps ? frontend.properties.configuration.ingress.fqdn : ''
+output backendInternalFqdn string = deployContainerApps ? '${backend.name}.internal.${cae.properties.defaultDomain}' : ''

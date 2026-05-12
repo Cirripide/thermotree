@@ -129,6 +129,23 @@ at `Actions → Azure deploy`. The first run takes ~10–15 minutes (Bicep
 does heavy infra creation, ACR Basic seeds slowly). Subsequent runs are
 ~3–5 min thanks to registry-side build cache.
 
+## Deploy flow
+
+The workflow runs Bicep twice per push, in a two-pass shape that
+prevents the historical "Container App can't come up because the
+placeholder image is on the wrong port" race:
+
+1. **Foundation pass** (`infra-foundation` job): Bicep with
+   `deployContainerApps=false` provisions ACR + Container Apps
+   Environment + Log Analytics only.
+2. **Build** (`build-backend`, `build-frontend` jobs, parallel): push
+   SHA-tagged images to ACR.
+3. **Apps pass** (`infra-apps` job): Bicep with
+   `deployContainerApps=true` and `backendImage`/`frontendImage`
+   pointing at the freshly-built images creates the two Container Apps
+   directly with the real images. Revisions go Healthy on the first
+   try — no placeholder phase to wait through.
+
 ## First-run footguns
 
 | Symptom | Cause | Fix |
@@ -138,7 +155,7 @@ does heavy infra creation, ACR Basic seeds slowly). Subsequent runs are
 | `AuthorizationFailed` on role assignment | SP lacks UAA on the RG | Re-run the UAA role grant in step 2. |
 | `AADSTS70021` on `azure/login` step | Federated credential subject doesn't match | The subject must be `repo:<ORG>/<REPO>:ref:refs/heads/main` (push) or `repo:<ORG>/<REPO>:pull_request` (PRs) — case-sensitive. |
 | `QuotaExceeded` in westeurope | Region capacity | Switch `location` in `infra/main.parameters.json` and `az group create -l` to `northeurope`. |
-| Both Container Apps show `Activation failed` after Infra stage | Expected. Placeholder image `mcr.microsoft.com/k8se/quickstart` listens on port 80, our `targetPort` is 8000/8080 → probes fail. | Wait for Build + Deploy to flip both apps to the real images. Single-mode revisions auto-retire the failed placeholder revision once a healthy one exists. |
+| `Failed to provision revision ... Operation expired` on `infra-apps` | A previous failed run left a Container App stuck in `Failed` provisioning state | `az containerapp delete -g rg-thermotree -n ca-backend --yes && az containerapp delete -g rg-thermotree -n ca-frontend --yes`, then re-run the workflow. |
 
 ## Verification
 
