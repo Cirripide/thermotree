@@ -289,6 +289,10 @@ resource frontend 'Microsoft.App/containerApps@2024-03-01' = if (deployContainer
               name: 'UPSTREAM_BACKEND'
               value: '${backend.name}.internal.${cae.properties.defaultDomain}'
             }
+            {
+              name: 'UPSTREAM_SCHEME'
+              value: 'https'
+            }
           ]
           probes: [
             {

@@ -66,9 +66,10 @@ services:
     image: thermotree-frontend:local
     container_name: thermotree_fe_prod
     environment:
-      # host:port the nginx template substitutes into the /api/ upstream.
+      # Host the nginx template substitutes into the /api/ upstream.
       # Matches the backend service name on this compose network. In ACA
-      # this is set to <backend>.internal.<env-default-domain>:8000.
+      # this is the .internal FQDN (no port — internal ingress listens on
+      # 443) and UPSTREAM_SCHEME is flipped to https there.
       UPSTREAM_BACKEND: "backend:8000"
     ports:
       # The only public port in the stack.

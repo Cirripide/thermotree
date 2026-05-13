@@ -44,9 +44,12 @@ USER root
 RUN rm -f /etc/nginx/conf.d/default.conf
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 
-# Default that keeps `docker compose up` working with the existing
-# docker-compose service name. Overridden in ACA by the container app env.
+# Defaults that keep `docker compose up` working with the existing
+# docker-compose service name. Overridden in ACA by the container app env
+# (UPSTREAM_BACKEND points at the .internal FQDN, UPSTREAM_SCHEME flips to
+# https so nginx doesn't get 301'd by ACA's internal ingress).
 ENV UPSTREAM_BACKEND=backend:8000
+ENV UPSTREAM_SCHEME=http
 
 # Angular's @angular-devkit/build-angular:application builder emits to
 # dist/<project>/browser/ (and a server/ sibling if SSR is enabled). The
