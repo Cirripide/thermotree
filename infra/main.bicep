@@ -199,8 +199,12 @@ resource backend 'Microsoft.App/containerApps@2024-03-01' = if (deployContainerA
           name: 'backend'
           image: backendImage
           resources: {
-            cpu: json('0.5')
-            memory: '1.0Gi'
+            // Consumption profile only accepts a fixed 1 vCPU : 2 GiB ladder
+            // (0.25/0.5Gi, 0.5/1.0Gi, ..., 2.0/4.0Gi). UVICORN_WORKERS stays
+            // at 1 — these extra cores feed the geospatial libraries inside
+            // one process, not multiple workers fighting ZonesRunner locks.
+            cpu: json('1.0')
+            memory: '2.0Gi'
           }
           env: concat([
             { name: 'NOMINATIM_USER_AGENT', secretRef: 'nominatim-user-agent' }
