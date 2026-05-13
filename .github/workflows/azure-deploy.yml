@@ -295,11 +295,12 @@ jobs:
             --parameters nominatimUserAgent="${{ secrets.NOMINATIM_USER_AGENT }}" \
             --parameters photonUserAgent="${{ secrets.PHOTON_USER_AGENT }}" \
             --parameters locationIqApiKey="${{ secrets.LOCATIONIQ_API_KEY }}" \
+            --parameters stacProviders="${{ secrets.STAC_PROVIDERS }}" \
             --parameters deployContainerApps=true \
             --parameters backendImage="${{ needs.build-backend.outputs.image }}" \
             --parameters frontendImage="${{ needs.build-frontend.outputs.image }}" \
-            --parameters customDomainName="${{ vars.FRONTEND_CUSTOM_DOMAIN }}" \
-            --parameters customDomainCertificateName="${{ vars.FRONTEND_CUSTOM_DOMAIN_CERT_NAME }}" \
+            --parameters customDomainName="${{ secrets.CUSTOM_DOMAIN_NAME }}" \
+            --parameters customDomainCertificateName="${{ secrets.FRONTEND_CUSTOM_DOMAIN_CERT_NAME }}" \
             --output none
 
           outputs=$(az deployment group show \
