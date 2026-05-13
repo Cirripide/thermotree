@@ -17,6 +17,12 @@ services:
   frontend:
     build:
       context: ./frontend
+      # Stop at the node-based stage of frontend/Dockerfile. The default
+      # final stage is nginx-unprivileged (no npm), which would make the
+      # `npm install && npm start` command below exit 127. Prod builds
+      # via docker-compose.prod.yml don't set `target` and get the
+      # full nginx image as intended.
+      target: build
       args:
         NODE_VER: ${NODE_VERSION}
     container_name: thermotree_fe

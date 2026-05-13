@@ -22,7 +22,8 @@ class LocationIQGeocoder(GeocoderProvider):
 
     Replaces the public Photon/Nominatim composite when an API key is set:
     autocomplete-grade search via /autocomplete, boundary polygons via
-    /search?osm_ids=...&polygon_geojson=1 (Nominatim-compatible shape).
+    /lookup?osm_ids=...&polygon_geojson=1 (Nominatim-compatible /lookup
+    mirror — /search would 400 on osm_ids, that param is /lookup-only).
 
     Same outward contract as NominatimGeocoder so PlacesService and
     BoundaryService are agnostic to which backend is wired.
@@ -114,7 +115,7 @@ class LocationIQGeocoder(GeocoderProvider):
         await self._throttle()
         try:
             r = await self._client.get(
-                f"{self._base_url}/search",
+                f"{self._base_url}/lookup",
                 params={
                     "key": self._api_key,
                     "osm_ids": osm_id,
@@ -125,7 +126,7 @@ class LocationIQGeocoder(GeocoderProvider):
             )
             r.raise_for_status()
         except httpx.HTTPError as e:
-            log.warning("LocationIQ /search lookup failed for %s: %s", osm_id, e)
+            log.warning("LocationIQ /lookup failed for %s: %s", osm_id, e)
             raise GeocoderUpstreamError(str(e)) from e
 
         items = r.json()

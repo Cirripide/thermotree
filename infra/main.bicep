@@ -248,7 +248,11 @@ resource backend 'Microsoft.App/containerApps@2024-03-01' = if (deployContainerA
         }
       ]
       scale: {
-        minReplicas: 0
+        // Keep one warm replica at all times. Scale-to-zero made every first
+        // request after an idle window pay ~20s for image pull + uvicorn boot
+        // + the heavy GeoPandas/rioxarray imports — visible as a stall on
+        // the very first keystroke in the city picker.
+        minReplicas: 1
         maxReplicas: 3
         rules: [
           {
