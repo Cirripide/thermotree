@@ -33,6 +33,12 @@ param backendAppName string = 'ca-backend'
 @description('Frontend Container App name.')
 param frontendAppName string = 'ca-frontend'
 
+@description('Custom domain hostname to bind to ca-frontend ingress (e.g. www.thermotree.com). Empty = no binding. When set, customDomainCertificateName must also be set.')
+param customDomainName string = ''
+
+@description('Name of an existing Microsoft.App/managedEnvironments/managedCertificates resource at the env level whose subject matches customDomainName. Discover via `az containerapp env certificate list -n <env> -g <rg>`. Required when customDomainName is set.')
+param customDomainCertificateName string = ''
+
 @description('Placeholder image. Kept as a sensible default for `backendImage` / `frontendImage` when running Bicep locally, but the workflow never deploys Container Apps with this image — it skips the apps on the foundation pass and supplies real images on the apps pass.')
 param placeholderImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
 
@@ -120,6 +126,25 @@ resource cae 'Microsoft.App/managedEnvironments@2024-03-01' = {
       }
     ]
   }
+}
+
+// ---------------------------------------------------------------------------
+// Custom-domain binding for ca-frontend.
+//
+// The managed certificate is REFERENCED, not created. It was provisioned
+// once via portal/CLI after DNS validation (asuid + CNAME records); having
+// Bicep declare it as a fresh resource would re-run DCV on every deploy
+// and risks transient failures. To rotate or replace the cert, do it
+// out-of-band (CLI/portal) and update customDomainCertificateName.
+//
+// When customDomainName / customDomainCertificateName are empty (default),
+// the binding is omitted entirely — the ingress block stays as it was.
+// ---------------------------------------------------------------------------
+var bindCustomDomain = !empty(customDomainName) && !empty(customDomainCertificateName)
+
+resource customDomainCert 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' existing = if (bindCustomDomain) {
+  parent: cae
+  name: customDomainCertificateName
 }
 
 // ---------------------------------------------------------------------------
@@ -256,7 +281,12 @@ resource frontend 'Microsoft.App/containerApps@2024-03-01' = if (deployContainer
     workloadProfileName: 'Consumption'
     configuration: {
       activeRevisionsMode: 'Single'
-      ingress: {
+      // customDomains is conditionally merged in: when bindCustomDomain
+      // is false, the property is omitted from the PUT payload entirely
+      // (vs. emitting `customDomains: []`, which would be reconciled the
+      // same way ACA reconciles an absent property — but the union form
+      // is explicit about intent).
+      ingress: union({
         external: true
         targetPort: 8080
         transport: 'auto'
@@ -267,7 +297,15 @@ resource frontend 'Microsoft.App/containerApps@2024-03-01' = if (deployContainer
             weight: 100
           }
         ]
-      }
+      }, bindCustomDomain ? {
+        customDomains: [
+          {
+            name: customDomainName
+            bindingType: 'SniEnabled'
+            certificateId: customDomainCert.id
+          }
+        ]
+      } : {})
       registries: [
         {
           server: acr.properties.loginServer
@@ -390,3 +428,4 @@ output backendAppName string = deployContainerApps ? backend.name : ''
 output frontendAppName string = deployContainerApps ? frontend.name : ''
 output frontendFqdn string = deployContainerApps ? frontend.properties.configuration.ingress.fqdn : ''
 output backendInternalFqdn string = deployContainerApps ? '${backend.name}.internal.${cae.properties.defaultDomain}' : ''
+output frontendCustomDomainBound string = (deployContainerApps && bindCustomDomain) ? customDomainName : ''

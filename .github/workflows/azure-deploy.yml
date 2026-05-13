@@ -298,6 +298,8 @@ jobs:
             --parameters deployContainerApps=true \
             --parameters backendImage="${{ needs.build-backend.outputs.image }}" \
             --parameters frontendImage="${{ needs.build-frontend.outputs.image }}" \
+            --parameters customDomainName="${{ vars.FRONTEND_CUSTOM_DOMAIN }}" \
+            --parameters customDomainCertificateName="${{ vars.FRONTEND_CUSTOM_DOMAIN_CERT_NAME }}" \
             --output none
 
           outputs=$(az deployment group show \

@@ -50,53 +50,35 @@ server {
     # FastAPI side. The backend's routers declare prefix="/api", so the
     # full /api/... path must be forwarded intact.
     #
-    # Per-request DNS resolution. Plain proxy_pass with a hostname
-    # resolves ONCE at nginx startup; ACA revisions get new pod IPs on
-    # every rollout and the stale resolution causes 502s until nginx is
-    # restarted. The fix: a `resolver` directive plus a variable upstream —
-    # nginx re-resolves variable upstreams on every request, subject to
-    # the resolver's `valid` TTL.
+    # proxy_pass is fully substituted by envsubst at container start
+    # (both ${UPSTREAM_SCHEME} and ${UPSTREAM_BACKEND} are env vars, no
+    # nginx variables in the host). The directive ends up static, so
+    # nginx resolves the hostname once at startup via libc — i.e. the
+    # pod's /etc/resolv.conf. On ACA, that's the only resolver that
+    # sees the env's .internal private DNS zone; the wire-server
+    # resolver at 168.63.129.16 does NOT, and using it returns the
+    # env's external Envoy VIP, producing the platform-branded
+    # "This Container App is stopped or does not exist" 404. The
+    # resolved IP — the env's internal LB VIP — is stable across
+    # backend revisions, so startup-time caching is correct.
     #
-    # 168.63.129.16 is Azure's virtual public IP, reachable from any Azure
-    # VNet (including Container Apps Environments). For local docker-compose
-    # runs the resolver is unreachable, but nginx tolerates that at startup
-    # and only fails when it actually needs to use it; Docker's embedded
-    # DNS resolves `backend` before this resolver is consulted, so compose
-    # keeps working unmodified.
+    # ${UPSTREAM_SCHEME} is `https` for ACA and `http` for compose.
+    # On ACA the backend ingress runs with allowInsecure:false, so
+    # plain HTTP gets a 301 to HTTPS; speaking HTTPS directly avoids
+    # that. The compose backend is plain uvicorn with no TLS.
     #
-    # proxy_pass uses a variable host and NO URI suffix. With a variable
-    # in proxy_pass, any trailing URI is treated as a literal replacement
-    # of the request URI (not a prefix-append), which would strip
-    # /api/<rest> down to /api/. Omitting the URI makes nginx forward
-    # $request_uri verbatim — including the /api/ prefix and query string —
-    # which is what FastAPI's prefix="/api" routers expect.
-    #
-    # HTTPS vs HTTP: ACA internal ingress runs with allowInsecure:false,
-    # so plain HTTP to ca-backend.internal.<env> returns 301 to HTTPS and
-    # builds the Location from the inbound Host header — a redirect loop
-    # back to the public host. Speaking HTTPS directly avoids that. SNI
-    # and Host must match the internal FQDN (the internal ingress cert is
-    # for *.internal.<env-default-domain>); forwarding the public Host
-    # would cause the same Location-echoing problem on any future redirect.
-    # ${UPSTREAM_SCHEME} is `https` in ACA and `http` in compose (the
-    # compose backend is plain uvicorn with no TLS).
-    #
-    # ${UPSTREAM_BACKEND} and ${UPSTREAM_SCHEME} are substituted by the
-    # image entrypoint (envsubst-on-templates). UPSTREAM_BACKEND format is
-    # a bare host — e.g. `backend:8000` for compose,
-    # `ca-backend.internal.<env-default-domain>` for ACA (ACA's internal
-    # ingress listens on 443, so no port suffix needed there).
+    # ${UPSTREAM_BACKEND} format is a bare host — `backend:8000` for
+    # compose, `ca-backend.internal.<env-default-domain>` for ACA
+    # (ACA's internal ingress listens on 443, no port suffix needed).
     location /api/ {
-        resolver 168.63.129.16 valid=10s ipv6=off;
-        set $upstream_backend "${UPSTREAM_BACKEND}";
-        proxy_pass ${UPSTREAM_SCHEME}://$upstream_backend;
+        proxy_pass ${UPSTREAM_SCHEME}://${UPSTREAM_BACKEND};
 
-        # No-ops when proxy_pass scheme is http (compose path).
+        # No-op when proxy_pass is http:// (compose). On https://
+        # nginx sends SNI = $proxy_host by default with this on.
         proxy_ssl_server_name on;
-        proxy_ssl_name        $upstream_backend;
 
         proxy_http_version 1.1;
-        proxy_set_header Host              $upstream_backend;
+        proxy_set_header Host              $proxy_host;
         proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
