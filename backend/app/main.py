@@ -2,8 +2,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from .api.errors import aoi_too_large_handler
 from .controllers import boundary, geocoding, health, zones
 from .core.config import get_settings
+from .services.boundary_service import AoiTooLarge
 from .services.geocoder.composite import CompositeGeocoder
 from .services.geocoder.locationiq import LocationIQGeocoder
 from .services.geocoder.nominatim import NominatimGeocoder
@@ -46,6 +48,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_exception_handler(AoiTooLarge, aoi_too_large_handler)
 app.include_router(health.router)
 app.include_router(geocoding.router)
 app.include_router(boundary.router)

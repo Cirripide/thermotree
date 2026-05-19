@@ -2,10 +2,10 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..api.errors import aoi_too_large_response, resolve_boundary_or_raise
+from ..api.errors import resolve_boundary_or_raise
 from ..core.config import get_settings
 from ..dependencies import get_boundary_service, get_zones_runner
-from ..services.boundary_service import AoiTooLarge, BoundaryService
+from ..services.boundary_service import BoundaryService
 from ..services.imagery_providers.base import InadequateDataQualityError
 from ..services.zones_runner import ZonesRunner
 
@@ -21,10 +21,7 @@ async def get_zones(
     svc: BoundaryService = Depends(get_boundary_service),
     runner: ZonesRunner = Depends(get_zones_runner),
 ):
-    try:
-        boundary = await resolve_boundary_or_raise(svc, osm_id)
-    except AoiTooLarge as e:
-        return aoi_too_large_response(e)
+    boundary = await resolve_boundary_or_raise(svc, osm_id)
 
     settings = get_settings()
     time_range = (

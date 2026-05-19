@@ -1,9 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
-from ..api.errors import aoi_too_large_response
+from ..api.errors import resolve_boundary_or_raise
 from ..dependencies import get_boundary_service
-from ..services.boundary_service import AoiTooLarge, BoundaryService, InvalidOsmId
-from ..services.geocoder.base import GeocoderNotFound
+from ..services.boundary_service import BoundaryService
 
 router = APIRouter(prefix="/api")
 
@@ -13,12 +12,5 @@ async def get_boundary(
     osm_id: str,
     svc: BoundaryService = Depends(get_boundary_service),
 ):
-    try:
-        result = await svc.resolve(osm_id)
-    except InvalidOsmId:
-        raise HTTPException(status_code=400, detail=f"invalid osm_id: {osm_id}")
-    except GeocoderNotFound:
-        raise HTTPException(status_code=404, detail=f"no boundary for {osm_id}")
-    except AoiTooLarge as e:
-        return aoi_too_large_response(e)
+    result = await resolve_boundary_or_raise(svc, osm_id)
     return result.feature

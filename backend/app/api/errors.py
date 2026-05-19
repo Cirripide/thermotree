@@ -1,4 +1,4 @@
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from .schemas import BoundaryError
@@ -11,14 +11,14 @@ from ..services.boundary_service import (
 from ..services.geocoder.base import GeocoderNotFound
 
 
-def aoi_too_large_response(e: AoiTooLarge) -> JSONResponse:
+async def aoi_too_large_handler(request: Request, exc: AoiTooLarge) -> JSONResponse:
     body = BoundaryError(
         message=(
-            f"AOI area ({e.aoi_area_km2:.0f} km²) exceeds maximum allowed "
-            f"({e.max_aoi_area_km2:.0f} km²). Consider selecting a smaller place."
+            f"AOI area ({exc.aoi_area_km2:.0f} km²) exceeds maximum allowed "
+            f"({exc.max_aoi_area_km2:.0f} km²). Consider selecting a smaller place."
         ),
-        aoi_area_km2=round(e.aoi_area_km2, 1),
-        max_aoi_area_km2=e.max_aoi_area_km2,
+        aoi_area_km2=round(exc.aoi_area_km2, 1),
+        max_aoi_area_km2=exc.max_aoi_area_km2,
     )
     return JSONResponse(status_code=400, content=body.model_dump())
 
@@ -26,11 +26,8 @@ def aoi_too_large_response(e: AoiTooLarge) -> JSONResponse:
 async def resolve_boundary_or_raise(
     svc: BoundaryService, osm_id: str
 ) -> ValidatedBoundary:
-    """Shared error-mapping for endpoints that consume a validated boundary.
-
-    Returns the boundary on success; raises HTTPException for invalid/missing
-    cases. AoiTooLarge bubbles up so the caller can return the structured 400
-    body via aoi_too_large_response.
+    """Returns the boundary on success; raises HTTPException for invalid /
+    missing cases. AoiTooLarge bubbles up to the app-level exception handler.
     """
     try:
         return await svc.resolve(osm_id)
