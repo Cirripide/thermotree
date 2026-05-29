@@ -52,76 +52,34 @@ import {
   PlacesService,
   ZoneCollection,
 } from './services/places.service';
-
-const BOUNDARY_SOURCE = 'boundary';
-const BOUNDARY_FILL_LAYER = 'boundary-fill';
-const BOUNDARY_OUTLINE_LAYER = 'boundary-outline';
-
-const ZONES_SOURCE = 'zones';
-const ZONES_LST_VALUED_LAYER = 'zones-lst-valued';
-const ZONES_LST_NODATA_LAYER = 'zones-lst-nodata';
-const ZONES_LST_OUTLINE_LAYER = 'zones-lst-outline';
-const ZONES_NDVI_VALUED_LAYER = 'zones-ndvi-valued';
-const ZONES_NDVI_NODATA_LAYER = 'zones-ndvi-nodata';
-const ZONES_NDVI_OUTLINE_LAYER = 'zones-ndvi-outline';
-const HATCH_IMAGE_ID = 'hatch-nodata';
-
-const ZONE_FILL_OPACITY = 0.7;
-
-// Landsat 9 launched Sept 2021 and reached nominal operations in early 2022,
-// so its first complete June–Aug summer is 2022. It is the most recent of the
-// four reference satellites (Landsat 8/9 + Sentinel-2 A/B), so it sets the
-// floor of the selectable year range.
-const LANDSAT_9_FIRST_COMPLETE_SUMMER = 2022;
-
-function computeAvailableYears(now: Date): number[] {
-  // June–Aug summer is "complete" only once September has begun.
-  const ceiling = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-  const years: number[] = [];
-  for (let y = LANDSAT_9_FIRST_COMPLETE_SUMMER; y <= ceiling; y++) {
-    years.push(y);
-  }
-  return years;
-}
-
-// matplotlib Inferno @ 5 evenly-spaced samples (perceptually uniform).
-// Order matches the standard Inferno semantic: darkest = lowest value (cold),
-// brightest = highest value (hot).
-const INFERNO_5 = ['#000004', '#51127c', '#b73779', '#fc8961', '#fcfdbf'];
-// Custom Urban-Greening 5-class scale: greys for built-up (NDVI < 0.6),
-// greens for vegetated (NDVI ≥ 0.6). Built infrastructure recedes into the
-// basemap; only vegetation carries chroma.
-const URBAN_GREENING_5 = ['#4d4d4d', '#999999', '#e0e0e0', '#74c476', '#006d2c'];
-
-// Fixed absolute breaks so the same value paints the same color across every
-// city — the only way to support visual cross-city comparison.
-const HEAT_BREAKS = [25, 30, 35, 40];        // °C
-const VEG_BREAKS = [0.2, 0.4, 0.6, 0.8];     // NDVI
-
-const DEFAULT_WORLD_BOUNDS: [number, number, number, number] = [-170, -55, 170, 70];
-
-interface LegendBin {
-  color: string;
-  lower: number | null;   // null = open-ended below (rendered as "< upper")
-  upper: number | null;   // null = open-ended above (rendered as "> lower")
-  label?: string;         // semantic class name shown alongside the numeric range
-}
-
-const HEAT_LEGEND_FIXED: LegendBin[] = [
-  { color: INFERNO_5[0], lower: null, upper: 25, label: 'Cool / Baseline' },
-  { color: INFERNO_5[1], lower: 25,   upper: 30, label: 'Moderate' },
-  { color: INFERNO_5[2], lower: 30,   upper: 35, label: 'High (Urban Standard)' },
-  { color: INFERNO_5[3], lower: 35,   upper: 40, label: 'Warning / Hotspot' },
-  { color: INFERNO_5[4], lower: 40,   upper: null, label: 'Critical Heat Zone' },
-];
-
-const VEG_LEGEND_FIXED: LegendBin[] = [
-  { color: URBAN_GREENING_5[0], lower: null, upper: 0.2, label: 'Bare / Built-up' },
-  { color: URBAN_GREENING_5[1], lower: 0.2,  upper: 0.4, label: 'Sparse vegetation' },
-  { color: URBAN_GREENING_5[2], lower: 0.4,  upper: 0.6, label: 'Moderate vegetation' },
-  { color: URBAN_GREENING_5[3], lower: 0.6,  upper: 0.8, label: 'Dense vegetation' },
-  { color: URBAN_GREENING_5[4], lower: 0.8,  upper: null, label: 'Very dense vegetation' },
-];
+import {
+  BOUNDARY_SOURCE,
+  BOUNDARY_FILL_LAYER,
+  BOUNDARY_OUTLINE_LAYER,
+  ZONES_SOURCE,
+  ZONES_LST_VALUED_LAYER,
+  ZONES_LST_NODATA_LAYER,
+  ZONES_LST_OUTLINE_LAYER,
+  ZONES_NDVI_VALUED_LAYER,
+  ZONES_NDVI_NODATA_LAYER,
+  ZONES_NDVI_OUTLINE_LAYER,
+  HATCH_IMAGE_ID,
+  ZONE_FILL_OPACITY,
+  LANDSAT_9_FIRST_COMPLETE_SUMMER,
+  DEFAULT_WORLD_BOUNDS,
+  INFERNO_5,
+  URBAN_GREENING_5,
+  HEAT_BREAKS,
+  VEG_BREAKS,
+  LegendBin,
+  HEAT_LEGEND_FIXED,
+  VEG_LEGEND_FIXED,
+} from './map-visualization.constants';
+import {
+  computeAvailableYears,
+  buildStepExpression,
+  buildHatchImage,
+} from './map-visualization.utils';
 
 @Component({
   selector: 'app-root',
@@ -164,8 +122,8 @@ export class AppComponent implements OnInit, AfterViewInit {
   readonly inputsLocked = computed(
     () => this.boundaryLoading() || this.zonesLoading(),
   );
-  readonly heatLegend = signal<LegendBin[]>([]);
-  readonly vegLegend = signal<LegendBin[]>([]);
+  readonly heatLegend = signal<readonly LegendBin[]>([]);
+  readonly vegLegend = signal<readonly LegendBin[]>([]);
   readonly heatHasNoData = signal(false);
   readonly vegHasNoData = signal(false);
   readonly colorsVisible = signal(true);
@@ -508,8 +466,8 @@ export class AppComponent implements OnInit, AfterViewInit {
     valuedLayerId: string,
     noDataLayerId: string,
     outlineLayerId: string,
-    breaks: number[],
-    palette: string[],
+    breaks: readonly number[],
+    palette: readonly string[],
   ): void {
     const stepExpr = buildStepExpression(property, breaks, palette);
 
@@ -617,48 +575,4 @@ export class AppComponent implements OnInit, AfterViewInit {
     }
     return 'Unable to load this city.';
   }
-}
-
-/**
- * Build a MapLibre `step` expression from interior breaks:
- * values < breaks[0] → palette[0],
- * breaks[0] ≤ values < breaks[1] → palette[1], …,
- * values ≥ breaks[N-1] → palette[N].
- * Requires breaks.length === palette.length − 1.
- */
-function buildStepExpression(
-  property: string,
-  breaks: number[],
-  palette: string[],
-): unknown[] {
-  const expr: unknown[] = ['step', ['get', property], palette[0]];
-  for (let i = 0; i < breaks.length; i++) {
-    expr.push(breaks[i], palette[i + 1]);
-  }
-  return expr;
-}
-
-/**
- * 16×16 tile with diagonal stripes — registered with each map as the
- * `fill-pattern` for cells whose indicator value is null. Geometry of the
- * three line segments tessellates seamlessly across tile borders.
- */
-function buildHatchImage(): ImageData {
-  const size = 16;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('2D canvas context unavailable');
-  ctx.fillStyle = '#E5E0D2';
-  ctx.fillRect(0, 0, size, size);
-  ctx.strokeStyle = '#9B9989';
-  ctx.lineWidth = 3;
-  ctx.lineCap = 'square';
-  ctx.beginPath();
-  ctx.moveTo(-4, 4);  ctx.lineTo(4, -4);
-  ctx.moveTo(-4, 20); ctx.lineTo(20, -4);
-  ctx.moveTo(12, 20); ctx.lineTo(20, 12);
-  ctx.stroke();
-  return ctx.getImageData(0, 0, size, size);
 }
