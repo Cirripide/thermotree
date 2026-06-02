@@ -79,6 +79,16 @@ class Settings(BaseSettings):
     max_mean_cloud_cover_pct: float = 40.0
     max_target_cell_nan_ratio: float = 0.5
 
+    # Tree-planting priority flag (needs_tree_planting per cell). Absolute dual
+    # threshold: a cell is flagged when it is both a daytime surface heat hotspot
+    # (LST >= lst_hot_threshold_c) AND under-vegetated (ndvi < ndvi_low_threshold).
+    # 40 C LST ~= 30 C air temp (LST=0.72*Ta+18.05), the EU heat-action trigger;
+    # NDVI < 0.2 = bare/impervious. lst_hot_threshold_c is climate/overpass-
+    # dependent — calibrated for temperate European cities (see CLAUDE.md known
+    # limitations); lower (~38) to widen the net.
+    lst_hot_threshold_c: float = 40.0
+    ndvi_low_threshold: float = 0.2
+
     # AOI safety
     max_aoi_area_km2: float = 3000.0
 

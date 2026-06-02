@@ -19,12 +19,19 @@ def build_zones_geojson(
     boundary_feature: dict,
     lst_composite: xr.DataArray,
     ndvi_composite: xr.DataArray,
+    lst_hot_threshold_c: float = 40.0,
+    ndvi_low_threshold: float = 0.2,
 ) -> dict:
     """Return a WGS84 GeoJSON FeatureCollection of clipped 300m cells.
 
     Each feature carries:
       - geometry: WGS84 Polygon or MultiPolygon (boundary-clipped)
-      - properties: cell_id, row, col, lst_celsius (float|None), ndvi (float|None)
+      - properties: cell_id, row, col, lst_celsius (float|None),
+        ndvi (float|None), needs_tree_planting (bool|None)
+
+    needs_tree_planting flags tree-planting priority cells via an absolute dual
+    threshold — hot AND under-vegetated: lst_celsius >= lst_hot_threshold_c and
+    ndvi < ndvi_low_threshold. None when either indicator is missing.
     """
     if lst_composite.shape != ndvi_composite.shape:
         raise ValueError(
@@ -79,6 +86,12 @@ def build_zones_geojson(
                     "col": col,
                     "lst_celsius": _nan_to_none(lst_arr[row, col]),
                     "ndvi": _nan_to_none(ndvi_arr[row, col]),
+                    "needs_tree_planting": _needs_tree_planting(
+                        lst_arr[row, col],
+                        ndvi_arr[row, col],
+                        lst_hot_threshold_c,
+                        ndvi_low_threshold,
+                    ),
                 },
             })
 
@@ -88,3 +101,22 @@ def build_zones_geojson(
 def _nan_to_none(v: float) -> float | None:
     f = float(v)
     return None if not np.isfinite(f) else round(f, 4)
+
+
+def _needs_tree_planting(
+    lst: float,
+    ndvi: float,
+    lst_hot_threshold_c: float,
+    ndvi_low_threshold: float,
+) -> bool | None:
+    """True when a cell is both a daytime heat hotspot and under-vegetated.
+
+    Absolute dual-threshold rule (hot AND bare): lst >= lst_hot_threshold_c and
+    ndvi < ndvi_low_threshold. Returns None when either indicator is missing
+    (NaN/inf) — we don't judge a cell we can't measure.
+    """
+    lst_f = float(lst)
+    ndvi_f = float(ndvi)
+    if not (np.isfinite(lst_f) and np.isfinite(ndvi_f)):
+        return None
+    return lst_f >= lst_hot_threshold_c and ndvi_f < ndvi_low_threshold
