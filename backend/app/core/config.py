@@ -82,12 +82,14 @@ class Settings(BaseSettings):
     # Tree-planting priority flag (needs_tree_planting per cell). Absolute dual
     # threshold: a cell is flagged when it is both a daytime surface heat hotspot
     # (LST >= lst_hot_threshold_c) AND under-vegetated (ndvi < ndvi_low_threshold).
-    # 40 C LST ~= 30 C air temp (LST=0.72*Ta+18.05), the EU heat-action trigger;
-    # NDVI < 0.2 = bare/impervious. lst_hot_threshold_c is climate/overpass-
-    # dependent — calibrated for temperate European cities (see CLAUDE.md known
-    # limitations); lower (~38) to widen the net.
+    # 40 C LST ~= 30 C air temp (LST=0.72*Ta+18.05), the EU heat-action trigger.
+    # NDVI < 0.4 flags everything below "adequately vegetated" (bare, built, or
+    # sparsely vegetated) — 0.4 is the canonical NDVI line for healthy vegetation
+    # and the sparse/moderate split in the frontend VEG_BREAKS. lst_hot_threshold_c
+    # is climate/overpass-dependent — calibrated for temperate European cities
+    # (see CLAUDE.md known limitations); lower (~38) to widen the net.
     lst_hot_threshold_c: float = 40.0
-    ndvi_low_threshold: float = 0.2
+    ndvi_low_threshold: float = 0.4
 
     # AOI safety
     max_aoi_area_km2: float = 3000.0

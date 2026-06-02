@@ -65,6 +65,10 @@ import {
   ZONES_NDVI_OUTLINE_LAYER,
   HATCH_IMAGE_ID,
   ZONE_FILL_OPACITY,
+  ZONES_PRIORITY_LAYER,
+  ZONES_PRIORITY_NODATA_LAYER,
+  PRIORITY_COLOR,
+  PRIORITY_FILL_OPACITY,
   LANDSAT_9_FIRST_COMPLETE_SUMMER,
   DEFAULT_WORLD_BOUNDS,
   INFERNO_5,
@@ -126,7 +130,19 @@ export class AppComponent implements OnInit, AfterViewInit {
   readonly vegLegend = signal<readonly LegendBin[]>([]);
   readonly heatHasNoData = signal(false);
   readonly vegHasNoData = signal(false);
-  readonly colorsVisible = signal(true);
+  // Active map view. 'priority' (default) = "Where Trees Are Needed" single map;
+  // 'compare' = the Heat-vs-Vegetation swipe; 'basemap' = data hidden, plain
+  // basemap + grid. colorsVisible is derived so every existing legend gate
+  // (`@if (... && colorsVisible())`) keeps working and now scopes itself to
+  // compare mode automatically.
+  readonly viewMode = signal<'priority' | 'compare' | 'basemap'>('priority');
+  readonly colorsVisible = computed(() => this.viewMode() === 'compare');
+  // Count of cells the backend flagged needs_tree_planting, for the priority
+  // legend ("N priority cells" / "no priority cells this summer").
+  readonly priorityCount = signal(0);
+  // Whether any delivered cell has needs_tree_planting === null (LST or NDVI
+  // missing). Gates the "No data" entry in the priority legend.
+  readonly priorityHasNoData = signal(false);
   readonly availableYears = signal<number[]>(computeAvailableYears(new Date()));
   readonly selectedYear = signal<number>(
     this.availableYears().at(-1) ?? LANDSAT_9_FIRST_COMPLETE_SUMMER,
@@ -228,7 +244,9 @@ export class AppComponent implements OnInit, AfterViewInit {
     this.vegLegend.set([]);
     this.heatHasNoData.set(false);
     this.vegHasNoData.set(false);
-    this.colorsVisible.set(true);
+    this.priorityCount.set(0);
+    this.priorityHasNoData.set(false);
+    this.viewMode.set('priority');
     this.clearZones();
     this.boundaryLoading.set(true);
     this.places
@@ -274,6 +292,8 @@ export class AppComponent implements OnInit, AfterViewInit {
     this.vegLegend.set([]);
     this.heatHasNoData.set(false);
     this.vegHasNoData.set(false);
+    this.priorityCount.set(0);
+    this.priorityHasNoData.set(false);
     this.clearZones();
     this.loadZones(this.currentOsmId, year);
   }
@@ -423,19 +443,26 @@ export class AppComponent implements OnInit, AfterViewInit {
   private renderZones(fc: ZoneCollection): void {
     if (!this.mapLeft || !this.mapRight) return;
 
-    // Only flag no-data presence; the color scales themselves are fixed.
+    // Single pass: flag no-data presence (color scales are fixed) and count
+    // the cells the backend marked as tree-planting priorities.
     let heatHasNoData = false;
     let vegHasNoData = false;
+    let priorityCount = 0;
+    let priorityHasNoData = false;
     for (const ft of fc.features) {
-      const { lst_celsius, ndvi } = ft.properties;
+      const { lst_celsius, ndvi, needs_tree_planting } = ft.properties;
       if (lst_celsius == null || !Number.isFinite(lst_celsius)) heatHasNoData = true;
       if (ndvi == null || !Number.isFinite(ndvi)) vegHasNoData = true;
+      if (needs_tree_planting === true) priorityCount += 1;
+      if (needs_tree_planting == null) priorityHasNoData = true;
     }
 
     this.heatLegend.set(HEAT_LEGEND_FIXED);
     this.vegLegend.set(VEG_LEGEND_FIXED);
     this.heatHasNoData.set(heatHasNoData);
     this.vegHasNoData.set(vegHasNoData);
+    this.priorityCount.set(priorityCount);
+    this.priorityHasNoData.set(priorityHasNoData);
 
     this.renderIndicatorLayers(
       this.mapLeft,
@@ -457,6 +484,16 @@ export class AppComponent implements OnInit, AfterViewInit {
       VEG_BREAKS,
       URBAN_GREENING_5,
     );
+
+    // The priority layer lives on BOTH maps so it reads as one seamless map
+    // under the swipe clip (identical content either side of the divider).
+    // Added after the indicator layers so the shared ZONES_SOURCE exists.
+    this.renderPriorityLayer(this.mapLeft);
+    this.renderPriorityLayer(this.mapRight);
+
+    // Apply the active mode (default 'priority' on a fresh city; the user's
+    // current choice on a year change) to the freshly (re)added layers.
+    this.applyViewMode(this.viewMode());
   }
 
   private renderIndicatorLayers(
@@ -486,6 +523,7 @@ export class AppComponent implements OnInit, AfterViewInit {
           paint: {
             'fill-color': stepExpr as never,
             'fill-opacity': ZONE_FILL_OPACITY,
+            'fill-antialias': false,
           },
         },
         BOUNDARY_OUTLINE_LAYER,
@@ -499,12 +537,13 @@ export class AppComponent implements OnInit, AfterViewInit {
           paint: {
             'fill-pattern': HATCH_IMAGE_ID,
             'fill-opacity': ZONE_FILL_OPACITY,
+            'fill-antialias': false,
           },
         },
         BOUNDARY_OUTLINE_LAYER,
       );
-      // Independent outline layer: draws every cell's edge regardless of fill
-      // state. Stays visible when toggleColors() hides the fills above.
+      // Independent outline layer: the 200 m grid. applyViewMode shows it only
+      // in "Show basemap" mode; the colored views are borderless.
       map.addLayer(
         {
           id: outlineLayerId,
@@ -528,6 +567,8 @@ export class AppComponent implements OnInit, AfterViewInit {
       ZONES_NDVI_VALUED_LAYER,
       ZONES_NDVI_NODATA_LAYER,
       ZONES_NDVI_OUTLINE_LAYER,
+      ZONES_PRIORITY_LAYER,
+      ZONES_PRIORITY_NODATA_LAYER,
     ];
     for (const map of this.maps()) {
       for (const id of layerIds) {
@@ -537,25 +578,90 @@ export class AppComponent implements OnInit, AfterViewInit {
     }
   }
 
-  toggleColors(): void {
-    const next = !this.colorsVisible();
-    this.colorsVisible.set(next);
-    const visibility = next ? 'visible' : 'none';
-    // Only the fill layers toggle — the per-cell outline layers stay visible
-    // in both states so the 300m grid frames the basemap when colors are off.
+  selectMode(mode: 'priority' | 'compare' | 'basemap'): void {
+    if (this.viewMode() === mode) return;
+    this.viewMode.set(mode);
+    this.applyViewMode(mode);
+  }
+
+  // Drives layer visibility for the three view modes across both maps.
+  //   compare  — Heat-vs-Vegetation swipe: LST+NDVI fills on, borderless cells.
+  //   basemap  — data fills off; the per-cell grid outline stays on to frame
+  //              the plain basemap for orientation.
+  //   priority — only the crimson needs_tree_planting layer; everything else
+  //              off. The swipe divider is hidden via CSS in the template, so
+  //              both maps painting identical content reads as a single map.
+  // Each setLayoutProperty is guarded: the layers only exist once zones load.
+  private applyViewMode(mode: 'priority' | 'compare' | 'basemap'): void {
+    const showFills = mode === 'compare';
+    const showOutlines = mode === 'basemap';
+    const showPriority = mode === 'priority';
+
     const fillLayerIds = [
       ZONES_LST_VALUED_LAYER,
       ZONES_LST_NODATA_LAYER,
       ZONES_NDVI_VALUED_LAYER,
       ZONES_NDVI_NODATA_LAYER,
     ];
+    const outlineLayerIds = [ZONES_LST_OUTLINE_LAYER, ZONES_NDVI_OUTLINE_LAYER];
+
     for (const map of this.maps()) {
       for (const id of fillLayerIds) {
         if (map.getLayer(id)) {
-          map.setLayoutProperty(id, 'visibility', visibility);
+          map.setLayoutProperty(id, 'visibility', showFills ? 'visible' : 'none');
+        }
+      }
+      for (const id of outlineLayerIds) {
+        if (map.getLayer(id)) {
+          map.setLayoutProperty(id, 'visibility', showOutlines ? 'visible' : 'none');
+        }
+      }
+      for (const id of [ZONES_PRIORITY_LAYER, ZONES_PRIORITY_NODATA_LAYER]) {
+        if (map.getLayer(id)) {
+          map.setLayoutProperty(id, 'visibility', showPriority ? 'visible' : 'none');
         }
       }
     }
+  }
+
+  private renderPriorityLayer(map: Map): void {
+    // ZONES_SOURCE is created by renderIndicatorLayers before this runs, and
+    // its data is refreshed via setData on a year change, so the filters
+    // re-apply themselves and we only add the layers once per map.
+    if (map.getLayer(ZONES_PRIORITY_LAYER)) return;
+    map.addLayer(
+      {
+        id: ZONES_PRIORITY_LAYER,
+        type: 'fill',
+        source: ZONES_SOURCE,
+        filter: ['==', ['get', 'needs_tree_planting'], true],
+        layout: { visibility: 'none' },
+        paint: {
+          'fill-color': PRIORITY_COLOR,
+          'fill-opacity': PRIORITY_FILL_OPACITY,
+          'fill-antialias': false,
+        },
+      },
+      BOUNDARY_OUTLINE_LAYER,
+    );
+    // No-data cells (needs_tree_planting null: LST or NDVI missing) get the
+    // hatch so the priority view distinguishes "couldn't evaluate" from
+    // "not a priority" (which is left as plain basemap).
+    map.addLayer(
+      {
+        id: ZONES_PRIORITY_NODATA_LAYER,
+        type: 'fill',
+        source: ZONES_SOURCE,
+        filter: ['==', ['get', 'needs_tree_planting'], null],
+        layout: { visibility: 'none' },
+        paint: {
+          'fill-pattern': HATCH_IMAGE_ID,
+          'fill-opacity': ZONE_FILL_OPACITY,
+          'fill-antialias': false,
+        },
+      },
+      BOUNDARY_OUTLINE_LAYER,
+    );
   }
 
   private maps(): Map[] {

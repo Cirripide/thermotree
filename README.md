@@ -13,8 +13,11 @@ This is a proof of concept and not a substitute for the work of local environmen
 ## What you get
 
 * A single search input that finds any place worldwide (city, town, district) through OpenStreetMap.
-* A full screen swipe map with two synchronized layers: **Heat** (Land Surface Temperature) on the left, **Vegetation** (NDVI) on the right. A draggable vertical slider sweeps between the two.
-* A uniform **200 m × 200 m grid** clipped to the place's administrative boundary, with every cell carrying its own LST and NDVI value computed from the year's summer satellite passes.
+* Three map views, switchable from the sidebar:
+  * **Where Trees Are Needed** (the default): only the cells that are both hot **and** low on vegetation, drawn in solid red on a single full-screen map. These are the highest-payoff spots for new trees; everywhere else is left as plain map.
+  * **Heat vs Vegetation**: a full screen swipe map with two synchronized layers: **Heat** (Land Surface Temperature) on the left, **Vegetation** (NDVI) on the right, and a draggable vertical slider between them.
+  * **Show basemap**: the plain street map with the grid, for orientation.
+* A uniform **200 m × 200 m grid** clipped to the place's administrative boundary, with every cell carrying its own LST and NDVI value (plus a tree-planting priority flag) computed from the year's summer satellite passes.
 * A year selector to compare summers. The earliest selectable year is 2022 (the first complete June, July and August with both Landsat 8 and Landsat 9 in nominal operation).
 * Floating legends with fixed thermal bands and vegetation bands, so the same color always means the same value across cities and years.
 
@@ -22,7 +25,7 @@ There is **no per city configuration**. The city is a runtime input chosen by th
 
 ## Live demo
 
-The current build is deployed at **<https://www.thermotree.com/>** — pick a city, drag the slider, switch summers. No setup required.
+The current build is deployed at **<https://www.thermotree.com/>**. Pick a city, see where trees are needed, switch views and summers. No setup required.
 
 ## Quick start
 
@@ -37,7 +40,7 @@ When everything is up:
 * Backend: <http://localhost:8000>
 * API docs: <http://localhost:8000/docs>
 
-Pick a city in the search input, wait for the first composite to compute (boundary fetch + STAC search + median composite + zonal stats can take a couple of minutes the first time), then drag the slider. Every request is computed on demand against the live STAC catalog; there is no persistent cache at present.
+Pick a city in the search input, wait for the first composite to compute (boundary fetch + STAC search + median composite + zonal stats can take a couple of minutes the first time), then explore the three map views. Every request is computed on demand against the live STAC catalog; there is no persistent cache at present.
 
 ## API
 
@@ -78,6 +81,12 @@ Defaults work out of the box. Optional overrides in `.env`:
 
 # Reorder or drop STAC backends. Default: planetary_computer,element84
 # STAC_PROVIDERS=planetary_computer,element84
+
+# "Where Trees Are Needed" thresholds. A cell is flagged when the summer
+# surface temperature is at or above LST_HOT_THRESHOLD_C (°C) AND the
+# vegetation index is below NDVI_LOW_THRESHOLD. Defaults shown.
+# LST_HOT_THRESHOLD_C=40
+# NDVI_LOW_THRESHOLD=0.4
 ```
 
 The public Nominatim and Photon instances are fine for development but rate limited. Production deployments should run their own.
@@ -111,6 +120,7 @@ thermotree/
 This is a proof of concept. Known limitations:
 
 * The Northern Hemisphere summer window (June, July, August) is hard coded. Tropical and Southern Hemisphere cities will need a per latitude summer rule before this can credibly serve every place on Earth.
+* The "Where Trees Are Needed" view uses absolute thresholds (LST ≥ 40 °C and NDVI < 0.4) calibrated for temperate European cities. Surface temperature is climate and overpass-time dependent, so other climates need retuned thresholds (both are env configurable: `LST_HOT_THRESHOLD_C`, `NDVI_LOW_THRESHOLD`) or a relative method.
 * AOIs above 3,000 km² are rejected with a 400. Very large metros (Tokyo, London, São Paulo) hit this cap and need either a smaller inner city polygon or internal tiling.
 * The public Photon and Nominatim instances are not production grade dependencies at scale; respect their usage policies and self host before any real traffic.
 * No auth, no rate limit, no observability beyond the FastAPI logs.
