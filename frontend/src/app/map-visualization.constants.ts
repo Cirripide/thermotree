@@ -13,6 +13,16 @@ export const HATCH_IMAGE_ID = 'hatch-nodata' as const;
 
 export const ZONE_FILL_OPACITY = 0.7 as const;
 
+// "Where Trees Are Needed" priority layer: the cells the backend flags
+// needs_tree_planting (hot AND low-vegetation). Painted a single solid crimson
+// — reads as heat/urgency and stays distinct from the Inferno heat ramp (which
+// tops out pale-yellow). MapLibre paint can't read CSS vars, so the color is a
+// JS const here; a matching --priority token in styles.scss feeds the legend.
+export const ZONES_PRIORITY_LAYER = 'zones-priority' as const;
+export const ZONES_PRIORITY_NODATA_LAYER = 'zones-priority-nodata' as const;
+export const PRIORITY_COLOR = '#C82F2F' as const;
+export const PRIORITY_FILL_OPACITY = 0.8 as const;
+
 // Landsat 9 launched Sept 2021 and reached nominal operations in early 2022,
 // so its first complete June–Aug summer is 2022. It is the most recent of the
 // four reference satellites (Landsat 8/9 + Sentinel-2 A/B), so it sets the

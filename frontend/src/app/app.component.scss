@@ -117,7 +117,7 @@ $breakpoint-legend-collapse: 1055px;
   // rule below so the sidebar copy (mobile) can reuse them.
   .legend {
     position: absolute;
-    bottom: 22px;
+    bottom: 44px;
     z-index: 17;
     pointer-events: none;
     box-shadow: var(--shadow-card);
@@ -193,6 +193,21 @@ $breakpoint-legend-collapse: 1055px;
     font-size: 0.68rem;
     color: var(--text-faint);
   }
+}
+
+// Priority view legend — single crimson class + a short explainer. Reuses the
+// .legend / .legend-body card shells (desktop corner + mobile sheet); only the
+// swatch fill and the note paragraph are specific to it.
+.swatch-priority {
+  background: var(--priority);
+}
+
+.legend-note {
+  margin: 8px 0 0;
+  max-width: 240px;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: var(--text-faint);
 }
 
 .sidebar {
@@ -304,6 +319,75 @@ $breakpoint-legend-collapse: 1055px;
     width: 14px;
     height: 14px;
     line-height: 14px;
+  }
+}
+
+// 3-way map-view switcher (Where Trees Are Needed | Heat vs Vegetation | Show
+// basemap). Segmented control modeled on .legend-toggle-btn but stacked
+// (icon over label) and available at all widths so it fits the sidebar.
+.view-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  background: var(--surface-input-strong);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.view-toggle-btn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  padding: 9px 6px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.18s $ease-out-expo,
+              color 0.18s $ease-out-expo,
+              box-shadow 0.18s $ease-out-expo;
+
+  mat-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+    color: var(--brand-strong);
+  }
+
+  span {
+    line-height: 1.15;
+  }
+
+  &:hover:not(.is-active) {
+    color: var(--text);
+    background: var(--state-hover);
+  }
+
+  &.is-active {
+    color: var(--text-strong);
+    background: var(--brand-active);
+    box-shadow: inset 0 -2px 0 var(--brand-focus);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--brand-focus);
+    outline-offset: -2px;
+    position: relative;
+    z-index: 1;
+  }
+
+  & + & {
+    border-left: 1px solid var(--border-subtle);
   }
 }
 

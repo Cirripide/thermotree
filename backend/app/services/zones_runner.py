@@ -32,6 +32,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from app.core.config import get_settings
 from app.services.boundary_service import ValidatedBoundary
 from app.services.imagery_providers import (
     LandsatLstProvider,
@@ -128,6 +129,12 @@ class ZonesRunner:
                 vegetation.build_summer_composite, boundary.bbox, time_range
             ),
         )
+        settings = get_settings()
         return await asyncio.to_thread(
-            build_zones_geojson, boundary.feature, lst, ndvi
+            build_zones_geojson,
+            boundary.feature,
+            lst,
+            ndvi,
+            lst_hot_threshold_c=settings.lst_hot_threshold_c,
+            ndvi_low_threshold=settings.ndvi_low_threshold,
         )

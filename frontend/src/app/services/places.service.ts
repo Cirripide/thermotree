@@ -23,6 +23,7 @@ export interface ZoneProperties {
   col: number;
   lst_celsius: number | null;
   ndvi: number | null;
+  needs_tree_planting: boolean | null;
 }
 
 export type ZoneFeature = Feature<Polygon | MultiPolygon, ZoneProperties>;

@@ -17,13 +17,14 @@
   <section class="about-section">
     <p>
       This map shows where a city is <strong>hot</strong> and where it is
-      <strong>green</strong>, area by area. Drag the vertical slider to
-      compare the two sides at any spot: heat on the left, vegetation on the
-      right.
+      <strong>green</strong>, neighborhood by neighborhood, computed from
+      satellite imagery. Pick any city in the world and a summer year, and the
+      map redraws for that place.
     </p>
     <p>
-      Pick a city anywhere in the world, choose a summer year, and the map
-      redraws for that place.
+      It opens by default on the <strong>Where Trees Are Needed</strong> view:
+      the spots that are both hot and short on vegetation, where new trees
+      would do the most good.
     </p>
   </section>
 
@@ -31,52 +32,64 @@
     <h3>Why this project</h3>
     <p>
       Cities trap heat. Asphalt and concrete soak up the sun all day and
-      release it slowly into the night, while trees and grass do the
-      opposite. As the climate warms, urban heat becomes a growing health
-      issue, especially for older residents and people who work outdoors.
+      release it slowly into the night, while trees and grass do the opposite.
+      As the climate warms, urban heat becomes a growing health issue,
+      especially for older residents and people who work outdoors.
     </p>
     <p>
-      The goal of this map is to raise awareness of the need to plant more
-      trees in cities, and to give an initial indication of
-      <strong>which areas need them most</strong>: the cells that come out
-      both very hot <strong>and</strong> very low on vegetation. Those are
-      the spots where new trees, parks, or green roofs would have the
-      largest cooling impact, and where the conversation about urban
-      greening should start.
+      The goal is to raise awareness of the need to plant more trees in cities,
+      and to give an initial indication of
+      <strong>which areas need them most</strong>: the cells that come out both
+      very hot and very low on vegetation. Those are where new trees, parks, or
+      green roofs would have the largest cooling impact, and where the
+      conversation about urban greening should start.
     </p>
+  </section>
+
+  <section class="about-section">
+    <h3>The three views</h3>
+    <p>
+      Switch between them with the <strong>Map view</strong> control in the
+      sidebar:
+    </p>
+    <ul>
+      <li>
+        <strong>Where Trees Are Needed</strong> (the default). Only the priority
+        cells are shown, in solid red: the areas that are both hot and low on
+        vegetation at the same time, where planting would do the most to cool
+        the city. Everywhere else is left as plain map.
+      </li>
+      <li>
+        <strong>Heat vs Vegetation</strong>. The full picture, split by a
+        draggable slider. On the left, heat: bright yellow is hot, dark purple
+        is cool. On the right, vegetation: dark green is dense and leafy, grey
+        is bare or built up.
+      </li>
+      <li>
+        <strong>Show basemap</strong>. Hides the colors and leaves just the
+        street map and the grid, for orientation.
+      </li>
+    </ul>
   </section>
 
   <section class="about-section">
     <h3>How to read the map</h3>
     <p>
       The city is split into a uniform grid of <strong>200 × 200 m cells</strong>.
-      Every cell is colored by two things:
-    </p>
-    <ul>
-      <li>
-        <strong>Left side, Heat.</strong> How hot the ground was during the
-        summer's daytime passes, in degrees Celsius. Bright yellow is hot,
-        dark purple is cool. This is <em>surface</em> temperature (rooftops,
-        asphalt, parks, water surfaces themselves), not the air temperature
-        you would read on a weather station.
-      </li>
-      <li>
-        <strong>Right side, Vegetation.</strong> How green and leafy the cell
-        is, on a 0 to 1 scale (NDVI). Dark green is dense vegetation, grey is
-        bare or built area.
-      </li>
-    </ul>
-    <p>
-      <strong>Cells with diagonal stripes</strong> have no data for that
-      summer. This typically happens when the satellite simply could not get
-      a clean read of that spot during the three summer months: too much
-      cloud cover, too few clear passes, or no consistent signal across June,
-      July and August.
+      The values are <em>surface</em> temperature and greenness measured by
+      satellite (rooftops, asphalt, parks, water), not the air temperature you
+      would read on a weather station.
     </p>
     <p>
-      Use the <strong>Summer</strong> dropdown to compare years. That is
-      where structural change becomes visible (a new park, a new
-      development) as opposed to the noise of any single summer's weather.
+      Cells drawn with <strong>diagonal stripes</strong> have no data for that
+      summer. This happens when the satellite could not get a clean read of
+      that spot across the three summer months: too much cloud cover, too few
+      clear passes, or no consistent signal over June, July and August.
+    </p>
+    <p>
+      Use the <strong>Summer</strong> dropdown to compare years. That is where
+      lasting change shows up, like a new park or a new development, rather than
+      the noise of a single summer's weather.
     </p>
   </section>
 
@@ -85,8 +98,8 @@
     <ul>
       <li>
         <strong>Heat</strong>: NASA and USGS <strong>Landsat 8 and 9</strong>
-        satellites, Surface Temperature product (Collection 2, Level 2).
-        100 m thermal sensor, daytime passes only.
+        satellites, Surface Temperature product (Collection 2, Level 2). 100 m
+        thermal sensor, daytime passes only.
       </li>
       <li>
         <strong>Vegetation</strong>: ESA <strong>Sentinel 2</strong>
@@ -100,10 +113,9 @@
     </ul>
     <p>
       For each summer (June, July and August), the app combines every clear
-      satellite pass over the city into a single <strong>median composite</strong>.
-      That step automatically filters out cloudy days, smoke, and short
-      lived anomalies. The composite is then averaged inside each 200 m
-      cell.
+      satellite pass over the city into a single <strong>median composite</strong>,
+      which filters out cloudy days, smoke, and short lived anomalies. The
+      composite is then averaged inside each 200 m cell.
     </p>
   </section>
 
@@ -114,5 +126,6 @@
       Boundaries: OpenStreetMap contributors. This is a proof of concept and
       not a substitute for the work of local environmental authorities.
     </p>
+    <p class="about-signature">Thermotree was created by <a href="https://github.com/Cirripide/" target="_blank" rel="noopener noreferrer">Cirripide</a>.</p>
   </section>
 </div>

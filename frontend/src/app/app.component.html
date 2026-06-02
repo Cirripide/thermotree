@@ -1,6 +1,10 @@
 <div class="app-shell">
   <main class="map-wrap" [class.is-loading]="mapLoading()">
-    <div id="compare-container" #compareContainer>
+    <div
+      id="compare-container"
+      #compareContainer
+      [class.hide-compare-divider]="viewMode() === 'priority'"
+    >
       <div id="map-left" #mapLeft></div>
       <div id="map-right" #mapRight></div>
     </div>
@@ -225,6 +229,82 @@
         </div>
       </div>
     }
+
+    @if (hasZones() && viewMode() === 'priority') {
+      <div class="legend legend-left legend-priority" aria-label="Tree-planting priority">
+        <div class="legend-title">Where Trees Are Needed</div>
+        <div class="legend-bins">
+          <div class="bin">
+            <span class="swatch swatch-priority"></span>
+            <span class="label">
+              <span class="label-name">Trees needed here</span>
+              <span class="label-range">Hot &amp; low vegetation</span>
+            </span>
+          </div>
+          @if (priorityHasNoData()) {
+            <div class="bin no-data">
+              <span class="swatch"></span>
+              <span class="label">
+                <span class="label-name">No data</span>
+              </span>
+            </div>
+          }
+        </div>
+        <p class="legend-note">
+          @if (priorityCount() > 0) {
+            {{ priorityCount() }} priority cells: both hot (surface ≥ 40 °C)
+            and low on greenery (NDVI &lt; 0.4), where new trees would cool the
+            most.
+          } @else {
+            No priority cells this summer. Nothing here is both hot and bare
+            enough to flag.
+          }
+        </p>
+      </div>
+
+      <div class="legend-mobile legend-mobile-priority" [class.is-open]="legendOpen()">
+        <button
+          type="button"
+          class="legend-sheet-handle"
+          (click)="toggleLegendOpen()"
+          [attr.aria-expanded]="legendOpen()"
+          [attr.aria-label]="legendOpen() ? 'Close legend' : 'Open legend'"
+        >
+          <mat-icon>{{ legendOpen() ? 'expand_more' : 'expand_less' }}</mat-icon>
+          <span>{{ legendOpen() ? 'Close legend' : 'Open legend' }}</span>
+        </button>
+        <div class="legend-sheet-content">
+          <div class="legend-body">
+            <div class="legend-title">Where Trees Are Needed</div>
+            <div class="legend-bins">
+              <div class="bin">
+                <span class="swatch swatch-priority"></span>
+                <span class="label">
+                  <span class="label-name">Trees needed here</span>
+                  <span class="label-range">Hot &amp; low vegetation</span>
+                </span>
+              </div>
+              @if (priorityHasNoData()) {
+                <div class="bin no-data">
+                  <span class="swatch"></span>
+                  <span class="label">
+                    <span class="label-name">No data</span>
+                  </span>
+                </div>
+              }
+            </div>
+            <p class="legend-note">
+              @if (priorityCount() > 0) {
+                {{ priorityCount() }} priority cells: hot (≥ 40 °C) &amp; sparse
+                greenery (NDVI &lt; 0.4).
+              } @else {
+                No priority cells this summer.
+              }
+            </p>
+          </div>
+        </div>
+      </div>
+    }
   </main>
 
   <aside class="sidebar" aria-label="City controls">
@@ -243,18 +323,6 @@
           <mat-icon>help_outline</mat-icon>
           <span>What is this?</span>
         </button>
-        @if (hasZones()) {
-          <button
-            type="button"
-            class="layer-toggle"
-            (click)="toggleColors()"
-            [attr.aria-pressed]="!colorsVisible()"
-            [attr.aria-label]="colorsVisible() ? 'Hide heat and vegetation colors' : 'Show heat and vegetation colors'"
-          >
-            <mat-icon>{{ colorsVisible() ? 'layers_clear' : 'palette' }}</mat-icon>
-            <span>{{ colorsVisible() ? 'Show basemap' : 'Show colors' }}</span>
-          </button>
-        }
       </div>
     </header>
 
@@ -331,6 +399,47 @@
         </mat-select>
       </mat-form-field>
     </section>
+
+    @if (hasZones()) {
+      <section class="sidebar-section view-section">
+        <div class="section-title">
+          <mat-icon>layers</mat-icon>
+          <span>Map view</span>
+        </div>
+        <div class="view-toggle" role="group" aria-label="Map view mode">
+          <button
+            type="button"
+            class="view-toggle-btn"
+            [class.is-active]="viewMode() === 'priority'"
+            [attr.aria-pressed]="viewMode() === 'priority'"
+            (click)="selectMode('priority')"
+          >
+            <mat-icon>forest</mat-icon>
+            <span>Where Trees Are Needed</span>
+          </button>
+          <button
+            type="button"
+            class="view-toggle-btn"
+            [class.is-active]="viewMode() === 'compare'"
+            [attr.aria-pressed]="viewMode() === 'compare'"
+            (click)="selectMode('compare')"
+          >
+            <mat-icon>compare_arrows</mat-icon>
+            <span>Heat vs Vegetation</span>
+          </button>
+          <button
+            type="button"
+            class="view-toggle-btn"
+            [class.is-active]="viewMode() === 'basemap'"
+            [attr.aria-pressed]="viewMode() === 'basemap'"
+            (click)="selectMode('basemap')"
+          >
+            <mat-icon>map</mat-icon>
+            <span>Show basemap</span>
+          </button>
+        </div>
+      </section>
+    }
 
   </aside>
 </div>

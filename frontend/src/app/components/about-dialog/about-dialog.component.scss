@@ -129,3 +129,25 @@
   color: var(--text-mute);
   font-size: 0.84rem;
 }
+
+.about-signature {
+  margin-top: 12px;
+  color: var(--text-faint);
+  font-size: 0.84rem;
+
+  a {
+    color: var(--brand-strong);
+    font-weight: 600;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--brand-focus);
+      outline-offset: 2px;
+      border-radius: 2px;
+    }
+  }
+}

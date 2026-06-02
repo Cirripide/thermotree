@@ -59,6 +59,22 @@ RUN groupadd --system --gid 10001 app \
 
 COPY --from=builder /opt/venv /opt/venv
 
+# --- GDAL / PROJ runtime config (tuned for remote COG reads) ---
+# The /api/zones path is ~95% windowed COG range-reads from Planetary Computer.
+# These knobs cut measured cold-read time ~25-30%:
+#   DISABLE_READDIR_ON_OPEN=EMPTY_DIR - don't list the blob "directory" on open
+#   HTTP_VERSION=2 / MULTIPLEX        - HTTP/2 keep-alive across range reads
+#   MERGE_CONSECUTIVE_RANGES          - coalesce adjacent ranges into one GET
+#   INGESTED_BYTES_AT_OPEN=32768      - prefetch the COG header (no 2nd RTT on open)
+#   VSI_CACHE / GDAL_CACHEMAX         - in-process block cache, fewer re-fetches
+#   HTTP_MAX_RETRY / RETRY_DELAY      - ride out transient 5xx/timeouts (was 0 retries)
+#
+# PROJ_LIB / GDAL_DATA are deliberately NOT set. The pip rasterio/pyproj wheels
+# bundle their own (newer) proj.db; pointing them at the system PROJ data
+# (the former PROJ_LIB=/usr/share/proj) triggered a version-mismatch error on
+# EVERY per-scene reproject ("proj.db ... comes from another PROJ installation")
+# and cost ~37% of read time. Letting the wheels self-locate removes both the
+# error spam and the cost. Do NOT re-add these two vars for the Python runtime.
 ENV PATH="/opt/venv/bin:${PATH}" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -66,9 +82,14 @@ ENV PATH="/opt/venv/bin:${PATH}" \
     GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR \
     GDAL_HTTP_VERSION=2 \
     GDAL_HTTP_MULTIPLEX=YES \
+    GDAL_HTTP_MERGE_CONSECUTIVE_RANGES=YES \
+    GDAL_INGESTED_BYTES_AT_OPEN=32768 \
+    GDAL_HTTP_MAX_RETRY=3 \
+    GDAL_HTTP_RETRY_DELAY=1 \
+    VSI_CACHE=TRUE \
+    VSI_CACHE_SIZE=67108864 \
+    GDAL_CACHEMAX=512 \
     CPL_VSIL_CURL_ALLOWED_EXTENSIONS=.tif,.tiff,.TIF,.TIFF \
-    GDAL_DATA=/usr/share/gdal \
-    PROJ_LIB=/usr/share/proj \
     UVICORN_WORKERS=1 \
     PORT=8000
 

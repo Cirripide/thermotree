@@ -51,6 +51,10 @@
   /* ── Status ────────────────────────────────────────────────── */
   --status-error-bg: rgb(162 61 46 / 0.92);   // #A23D2E soft clay
 
+  /* ── Priority ("Where Trees Are Needed", heat/urgency crimson) ─ */
+  --priority-rgb: 200 47 47;               // #C82F2F crimson
+  --priority:     rgb(var(--priority-rgb));
+
   /* ── No-data hatch (legend swatch for missing data on bone) ── */
   --nodata-stripe-dark:  #9B9989;          // silvered olive
   --nodata-stripe-light: #E5E0D2;          // pale linen
@@ -221,4 +225,13 @@ body {
   .mat-mdc-dialog-content {
     padding: 0;
   }
+}
+
+// "Where Trees Are Needed" renders a single seamless map by painting the same
+// crimson priority layer on both swipe maps, then hiding the compare divider so
+// there's no swipe affordance. The divider element is injected by the library
+// and styled by the global maplibre-gl-compare CSS imported above, so this hide
+// rule must also be global — component-encapsulated SCSS can't match it.
+#compare-container.hide-compare-divider .maplibregl-compare {
+  display: none;
 }
