@@ -170,6 +170,33 @@ class NominatimGeocoder(GeocoderProvider):
                 return candidate
         return None
 
+    @staticmethod
+    def _compose_display_name(item: dict) -> str:
+        # Nominatim's raw display_name can include a misleading intermediate
+        # level: for the Milano comune boundary it lists municipality "Rodano"
+        # (a neighbouring comune). Compose our own label from a whitelist of
+        # trusted parts (name + county + state + country), de-duplicating
+        # repeats; any noisy local level (municipality/suburb/...) is excluded
+        # by construction. Falls back to the raw value if address is absent.
+        address = item.get("address") or {}
+        name = (
+            item.get("name")
+            or address.get("city")
+            or address.get("town")
+            or address.get("village")
+            or address.get("municipality")
+        )
+        parts: list[str] = []
+        for value in (
+            name,
+            address.get("county"),
+            address.get("state"),
+            address.get("country"),
+        ):
+            if value and value not in parts:
+                parts.append(value)
+        return ", ".join(parts) or item.get("display_name", "")
+
     def _build_boundary(self, osm_id: str, item: dict, geom: dict) -> BoundaryResult:
         bbox = self._bbox_from_nominatim(item["boundingbox"])
         return BoundaryResult(
@@ -180,7 +207,7 @@ class NominatimGeocoder(GeocoderProvider):
                 "geometry": geom,
                 "properties": {
                     "osm_id": osm_id,
-                    "display_name": item.get("display_name", ""),
+                    "display_name": self._compose_display_name(item),
                 },
             },
             bbox=bbox,
