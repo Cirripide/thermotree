@@ -7,6 +7,10 @@
     >
       <div id="map-left" #mapLeft></div>
       <div id="map-right" #mapRight></div>
+      <!-- Zoom + attribution mount into these anchors (siblings of the map
+           divs) so the maplibre-gl-compare swipe clip never hides them. -->
+      <div class="map-ctrl map-ctrl--top-left" #navAnchor></div>
+      <div class="map-ctrl map-ctrl--bottom-left" #attribAnchor></div>
     </div>
     @if (mapLoading()) {
       <div class="skeleton" aria-busy="true" aria-label="Loading basemap">
@@ -307,7 +311,7 @@
     }
   </main>
 
-  <aside class="sidebar" aria-label="City controls">
+  <aside class="sidebar" aria-label="City controls" [class.is-collapsed]="sidebarCollapsed()">
     <header class="sidebar-header">
       <div class="wordmark">
         <img class="wordmark-logo" src="assets/logo.svg" alt="" aria-hidden="true" width="28" height="28">
@@ -326,6 +330,7 @@
       </div>
     </header>
 
+    <div class="sidebar-collapsible" id="sidebar-collapsible">
     <section class="sidebar-section search-section">
       <mat-form-field appearance="outline" class="search-field" subscriptSizing="dynamic">
         <span matIconPrefix class="search-prefix">
@@ -399,47 +404,67 @@
         </mat-select>
       </mat-form-field>
     </section>
+    </div>
 
-    @if (hasZones()) {
-      <section class="sidebar-section view-section">
-        <div class="section-title">
-          <mat-icon>layers</mat-icon>
-          <span>Map view</span>
-        </div>
-        <div class="view-toggle" role="group" aria-label="Map view mode">
-          <button
-            type="button"
-            class="view-toggle-btn"
-            [class.is-active]="viewMode() === 'priority'"
-            [attr.aria-pressed]="viewMode() === 'priority'"
-            (click)="selectMode('priority')"
-          >
-            <mat-icon>forest</mat-icon>
-            <span>Where Trees Are Needed</span>
-          </button>
-          <button
-            type="button"
-            class="view-toggle-btn"
-            [class.is-active]="viewMode() === 'compare'"
-            [attr.aria-pressed]="viewMode() === 'compare'"
-            (click)="selectMode('compare')"
-          >
-            <mat-icon>compare_arrows</mat-icon>
-            <span>Heat vs Vegetation</span>
-          </button>
-          <button
-            type="button"
-            class="view-toggle-btn"
-            [class.is-active]="viewMode() === 'basemap'"
-            [attr.aria-pressed]="viewMode() === 'basemap'"
-            (click)="selectMode('basemap')"
-          >
-            <mat-icon>map</mat-icon>
-            <span>Show basemap</span>
-          </button>
-        </div>
-      </section>
-    }
+    <section class="sidebar-section view-section">
+      <div class="section-title">
+        <mat-icon>layers</mat-icon>
+        <span>Map view</span>
+      </div>
+      <div
+        class="view-toggle"
+        role="group"
+        aria-label="Map view mode"
+        [class.is-disabled]="!hasZones()"
+      >
+        <button
+          type="button"
+          class="view-toggle-btn"
+          [class.is-active]="viewMode() === 'priority'"
+          [attr.aria-pressed]="viewMode() === 'priority'"
+          [disabled]="!hasZones()"
+          (click)="selectMode('priority')"
+        >
+          <mat-icon>forest</mat-icon>
+          <span>Where Trees Are Needed</span>
+        </button>
+        <button
+          type="button"
+          class="view-toggle-btn"
+          [class.is-active]="viewMode() === 'compare'"
+          [attr.aria-pressed]="viewMode() === 'compare'"
+          [disabled]="!hasZones()"
+          (click)="selectMode('compare')"
+        >
+          <mat-icon>compare_arrows</mat-icon>
+          <span>Heat vs Vegetation</span>
+        </button>
+        <button
+          type="button"
+          class="view-toggle-btn"
+          [class.is-active]="viewMode() === 'basemap'"
+          [attr.aria-pressed]="viewMode() === 'basemap'"
+          [disabled]="!hasZones()"
+          (click)="selectMode('basemap')"
+        >
+          <mat-icon>map</mat-icon>
+          <span>Show basemap</span>
+        </button>
+      </div>
+    </section>
+
+    <button
+      type="button"
+      class="sidebar-sheet-handle"
+      (click)="toggleSidebar()"
+      [disabled]="mapMoving()"
+      [attr.aria-expanded]="!sidebarCollapsed()"
+      aria-controls="sidebar-collapsible"
+      [attr.aria-label]="sidebarCollapsed() ? 'Show search and year' : 'Hide search and year'"
+    >
+      <mat-icon>{{ sidebarCollapsed() ? 'expand_more' : 'expand_less' }}</mat-icon>
+      <span>{{ sidebarCollapsed() ? 'Search & year' : 'Hide' }}</span>
+    </button>
 
   </aside>
 </div>

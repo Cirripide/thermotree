@@ -32,6 +32,38 @@ $breakpoint-legend-collapse: 1055px;
     filter: contrast(0.96) saturate(0.9);
   }
 
+  // maplibre-gl-compare clips each map with the legacy `clip` property, which
+  // also clips touch hit-testing and splits a two-finger pinch across the
+  // divider. Keep the bottom map unclipped (a full-width touch target) and make
+  // the top map visual-only, so every gesture lands on #map-left and drives both
+  // via the compare sync. The `!important` overrides the lib's inline clip (it
+  // only writes that, never reads it); the swipe boundary is still defined by
+  // #map-right's clip, and #map-left is hidden beneath it on the right side.
+  #map-left {
+    clip: auto !important;
+  }
+  #map-right {
+    pointer-events: none;
+  }
+
+  // Map controls live in these anchors (siblings of the two map divs) rather
+  // than inside #map-left, so the swipe clip maplibre-gl-compare applies to the
+  // map containers never cuts them off. Sized to content so they don't block
+  // map panning; z-index clears the canvas and the compare slider (z-index 1)
+  // while staying under the mobile legend sheet (z-index 17).
+  .map-ctrl {
+    position: absolute;
+    z-index: 12;
+  }
+  .map-ctrl--top-left {
+    top: 10px;
+    left: 10px;
+  }
+  .map-ctrl--bottom-left {
+    bottom: 0;
+    left: 0;
+  }
+
   &.is-loading {
     #map-left,
     #map-right {
@@ -224,9 +256,10 @@ $breakpoint-legend-collapse: 1055px;
 
 .sidebar-header {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 14px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 20px 20px 16px;
   border-bottom: 1px solid var(--border-subtle);
 
@@ -305,6 +338,17 @@ $breakpoint-legend-collapse: 1055px;
   }
 }
 
+// The mobile collapse wrapper sits between the sections, so the adjacency
+// divider above the view section no longer matches; restore it here.
+.sidebar-collapsible + .sidebar-section {
+  border-top: 1px solid var(--border-subtle);
+}
+
+// Bottom pull-tab is mobile-only; the media query below reveals it.
+.sidebar-sheet-handle {
+  display: none;
+}
+
 .section-title {
   display: flex;
   align-items: center;
@@ -332,6 +376,14 @@ $breakpoint-legend-collapse: 1055px;
   border: 1px solid var(--border-input);
   border-radius: var(--radius-md);
   overflow: hidden;
+
+  // No city / data yet (or a year is loading): the buttons can't do anything,
+  // so dim the whole group and swallow pointer events. Each button also carries
+  // [disabled] for assistive tech; this is the visual half.
+  &.is-disabled {
+    opacity: 0.55;
+    pointer-events: none;
+  }
 }
 
 .view-toggle-btn {
@@ -368,7 +420,11 @@ $breakpoint-legend-collapse: 1055px;
     line-height: 1.15;
   }
 
-  &:hover:not(.is-active) {
+  &:disabled {
+    cursor: not-allowed;
+  }
+
+  &:hover:not(.is-active):not(:disabled) {
     color: var(--text);
     background: var(--state-hover);
   }
@@ -573,7 +629,7 @@ $breakpoint-legend-collapse: 1055px;
   .sidebar {
     order: 0;
     width: auto;
-    max-height: 60vh;
+    max-height: 85vh;
     border-left: none;
     border-bottom: 1px solid var(--border-subtle);
   }
@@ -589,6 +645,70 @@ $breakpoint-legend-collapse: 1055px;
 
   .sidebar-section {
     padding: 12px 16px;
+  }
+
+  // The selected-city chip duplicates what the search field already shows once
+  // a city is picked; drop it on phones to give the map back the vertical room.
+  .selected-hint {
+    display: none;
+  }
+
+  // Collapsible Search + Summer block. Same max-height slide as the legend
+  // bottom-sheet (.legend-sheet-content) so the map reclaims the height.
+  .sidebar-collapsible {
+    overflow: hidden;
+    max-height: 60vh;
+    transition: max-height 0.28s $ease-out-expo;
+    // Never let the height-constrained sidebar flex-shrink this below its
+    // content and clip Search/Summer (the iPhone SE bug); the sidebar's
+    // overflow-y:auto handles any genuine overflow instead.
+    flex-shrink: 0;
+  }
+  .sidebar.is-collapsed .sidebar-collapsible {
+    max-height: 0;
+  }
+
+  // Full-width pull-tab at the panel's bottom edge, mirroring .legend-sheet-handle.
+  .sidebar-sheet-handle {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    border-top: 1px solid var(--border-subtle);
+    width: 100%;
+    color: var(--text-strong);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 12px 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: background 0.15s $ease-out-expo;
+
+    mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      line-height: 20px;
+    }
+
+    &:hover:not(:disabled) {
+      background: var(--state-hover);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--brand-focus);
+      outline-offset: -2px;
+    }
   }
 
   .zones-loading-overlay,
