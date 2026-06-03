@@ -162,15 +162,28 @@ export class AppComponent implements OnInit, AfterViewInit {
   // the map gets the full available height on small phones; user taps the
   // handle bar to slide it up.
   readonly legendOpen = signal(false);
+  // Mobile-only: collapse the menu to hide Search + Summer, leaving the title
+  // bar and Map-view buttons visible so the map gets more height. Open by
+  // default; the user taps the bottom pull-tab to slide it closed.
+  readonly sidebarCollapsed = signal(false);
+  // True while either map is animating (fly / zoom / pan). Disables the mobile
+  // Hide/Show toggle, whose tap resizes the map and would interrupt the
+  // animation. Debounced off so the synced-map event churn doesn't flicker it.
+  readonly mapMoving = signal(false);
 
   private currentOsmId: string | null = null;
   private mapLeft: Map | undefined;
   private mapRight: Map | undefined;
   private compare: Compare | undefined;
+  private nav: NavigationControl | undefined;
+  private attribution: AttributionControl | undefined;
+  private moveSettleTimer: ReturnType<typeof setTimeout> | undefined;
 
   @ViewChild('mapLeft') private mapLeftEl!: ElementRef<HTMLElement>;
   @ViewChild('mapRight') private mapRightEl!: ElementRef<HTMLElement>;
   @ViewChild('compareContainer') private compareContainerEl!: ElementRef<HTMLElement>;
+  @ViewChild('navAnchor') private navAnchorEl!: ElementRef<HTMLElement>;
+  @ViewChild('attribAnchor') private attribAnchorEl!: ElementRef<HTMLElement>;
 
   constructor() {
     effect(() => {
@@ -282,6 +295,10 @@ export class AppComponent implements OnInit, AfterViewInit {
     this.legendOpen.update(v => !v);
   }
 
+  toggleSidebar(): void {
+    this.sidebarCollapsed.update(v => !v);
+  }
+
   onYearChange(year: number | null): void {
     if (year == null || year === this.selectedYear()) return;
     this.selectedYear.set(year);
@@ -355,10 +372,15 @@ export class AppComponent implements OnInit, AfterViewInit {
       maxZoom: 21,
       attributionControl: false,
     });
-    this.mapLeft.addControl(new NavigationControl({}), 'top-left');
-    this.mapLeft.addControl(
-      new AttributionControl({ compact: true }),
-      'bottom-left',
+    // Mount the zoom + attribution controls into the un-clipped overlay anchors
+    // (siblings of the map divs) instead of inside #map-left, which
+    // maplibre-gl-compare clips as the swipe slider moves. Targeting mapLeft
+    // preserves the existing zoom -> sync-move -> mapRight behavior.
+    this.nav = new NavigationControl({});
+    this.navAnchorEl.nativeElement.appendChild(this.nav.onAdd(this.mapLeft));
+    this.attribution = new AttributionControl({ compact: true });
+    this.attribAnchorEl.nativeElement.appendChild(
+      this.attribution.onAdd(this.mapLeft),
     );
 
     // Clone the parsed style so the two maps don't share mutable layer state.
@@ -390,6 +412,23 @@ export class AppComponent implements OnInit, AfterViewInit {
     this.mapLeft.on('load', () => onLoad(this.mapLeft!));
     this.mapRight.on('load', () => onLoad(this.mapRight!));
 
+    // Track animation state so the mobile Hide/Show toggle can be disabled while
+    // the map flies/zooms (tapping it resizes the map and stops the animation).
+    // Debounce the "settled" edge: the two synced maps emit a churn of move
+    // events (dual fitBounds + sync jumpTo) that would otherwise flicker it off.
+    const onMoveStart = () => {
+      if (this.moveSettleTimer) clearTimeout(this.moveSettleTimer);
+      this.mapMoving.set(true);
+    };
+    const onMoveEnd = () => {
+      if (this.moveSettleTimer) clearTimeout(this.moveSettleTimer);
+      this.moveSettleTimer = setTimeout(() => this.mapMoving.set(false), 200);
+    };
+    for (const m of [this.mapLeft, this.mapRight]) {
+      m.on('movestart', onMoveStart);
+      m.on('moveend', onMoveEnd);
+    }
+
     this.compare = new Compare(
       this.mapLeft,
       this.mapRight,
@@ -398,6 +437,9 @@ export class AppComponent implements OnInit, AfterViewInit {
     );
 
     this.destroyRef.onDestroy(() => {
+      if (this.moveSettleTimer) clearTimeout(this.moveSettleTimer);
+      this.nav?.onRemove();
+      this.attribution?.onRemove();
       this.compare?.remove();
       this.mapLeft?.remove();
       this.mapRight?.remove();
