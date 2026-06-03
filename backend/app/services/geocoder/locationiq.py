@@ -52,6 +52,11 @@ class LocationIQGeocoder(GeocoderProvider):
     async def aclose(self) -> None:
         await self._client.aclose()
 
+    def _scrub(self, msg: str) -> str:
+        # httpx error messages embed the full request URL, including the
+        # ?key=... query param. Never let the API key reach logs or clients.
+        return msg.replace(self._api_key, "***") if self._api_key else msg
+
     async def _throttle(self) -> None:
         async with self._rate_lock:
             elapsed = time.monotonic() - self._last_call_ts
@@ -88,9 +93,18 @@ class LocationIQGeocoder(GeocoderProvider):
                 },
             )
             r.raise_for_status()
-        except httpx.HTTPError as e:
-            log.warning("LocationIQ /autocomplete failed: %s", e)
-            raise GeocoderUpstreamError(str(e)) from e
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                # LocationIQ answers 404 "Unable to geocode" when nothing
+                # matches the tag-filtered query (e.g. a bare postal code).
+                # That's "no results", not an upstream fault.
+                log.debug("LocationIQ /autocomplete: no results for %r", q)
+                return []
+            log.warning("LocationIQ /autocomplete failed: %s", self._scrub(str(e)))
+            raise GeocoderUpstreamError(self._scrub(str(e))) from e
+        except httpx.HTTPError as e:  # timeouts, connection errors, etc.
+            log.warning("LocationIQ /autocomplete failed: %s", self._scrub(str(e)))
+            raise GeocoderUpstreamError(self._scrub(str(e))) from e
 
         out: list[PlaceCandidate] = []
         for item in r.json():
@@ -125,9 +139,21 @@ class LocationIQGeocoder(GeocoderProvider):
                 },
             )
             r.raise_for_status()
-        except httpx.HTTPError as e:
-            log.warning("LocationIQ /lookup failed for %s: %s", osm_id, e)
-            raise GeocoderUpstreamError(str(e)) from e
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                # 404 from /lookup means the osm_id didn't resolve to a place,
+                # not a provider outage. Surface it as "not found".
+                log.debug("LocationIQ /lookup: no place for %s", osm_id)
+                raise GeocoderNotFound(f"no place for osm_id={osm_id}") from e
+            log.warning(
+                "LocationIQ /lookup failed for %s: %s", osm_id, self._scrub(str(e))
+            )
+            raise GeocoderUpstreamError(self._scrub(str(e))) from e
+        except httpx.HTTPError as e:  # timeouts, connection errors, etc.
+            log.warning(
+                "LocationIQ /lookup failed for %s: %s", osm_id, self._scrub(str(e))
+            )
+            raise GeocoderUpstreamError(self._scrub(str(e))) from e
 
         items = r.json()
         if not items:
@@ -177,7 +203,10 @@ class LocationIQGeocoder(GeocoderProvider):
             r.raise_for_status()
         except httpx.HTTPError as e:
             log.warning(
-                "LocationIQ /search upgrade failed for %s, %s: %s", name, country, e
+                "LocationIQ /search upgrade failed for %s, %s: %s",
+                name,
+                country,
+                self._scrub(str(e)),
             )
             return None
 

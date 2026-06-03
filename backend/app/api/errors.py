@@ -8,7 +8,7 @@ from ..services.boundary_service import (
     InvalidOsmId,
     ValidatedBoundary,
 )
-from ..services.geocoder.base import GeocoderNotFound
+from ..services.geocoder.base import GeocoderNotFound, GeocoderUpstreamError
 
 
 async def aoi_too_large_handler(request: Request, exc: AoiTooLarge) -> JSONResponse:
@@ -21,6 +21,17 @@ async def aoi_too_large_handler(request: Request, exc: AoiTooLarge) -> JSONRespo
         max_aoi_area_km2=exc.max_aoi_area_km2,
     )
     return JSONResponse(status_code=400, content=body.model_dump())
+
+
+async def geocoder_upstream_handler(
+    request: Request, exc: GeocoderUpstreamError
+) -> JSONResponse:
+    # Genuine provider failures (429/5xx/timeout). Detail stays in logs only;
+    # the client body must not echo str(exc), which can carry provider URLs.
+    return JSONResponse(
+        status_code=502,
+        content={"message": "Upstream geocoding provider is unavailable. Please retry."},
+    )
 
 
 async def resolve_boundary_or_raise(
