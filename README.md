@@ -23,10 +23,6 @@ This is a proof of concept and not a substitute for the work of local environmen
 
 There is **no per city configuration**. The city is a runtime input chosen by the user, the boundary is fetched on demand from OpenStreetMap, and the per cell satellite values are computed server side for that boundary. Switching cities is a single click in the UI.
 
-## Live demo
-
-The current build is deployed at **<https://www.thermotree.com/>**. Pick a city, see where trees are needed, switch views and summers. No setup required.
-
 ## Quick start
 
 ```bash
